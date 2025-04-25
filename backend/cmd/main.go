@@ -1,5 +1,10 @@
 package main
-import "fmt"
+
+import (
+	"allinone_backend/api"
+)
+
 func main() {
-    fmt.Println("ALLInOne 后端服务启动成功！")
+	r := api.SetupRouter()
+	r.Run(":3001")
 }

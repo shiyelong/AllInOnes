@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:frontend/common/api.dart';
 
 class LoginPage extends StatelessWidget {
   @override
@@ -46,13 +49,13 @@ class LoginPage extends StatelessWidget {
                         side: BorderSide(color: Colors.blueAccent),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                       ),
-                      onPressed: () {
+                      onPressed: () async {
                         // TODO: 跳转到扫码登录页面
                       },
                     ),
                     SizedBox(height: 24),
                     TextButton(
-                      onPressed: () {
+                      onPressed: () async {
                         Navigator.pushNamed(context, '/register');
                       },
                       child: Text('没有账号？注册', style: TextStyle(color: Colors.blueAccent)),
@@ -111,6 +114,18 @@ class _LoginFormState extends State<_LoginForm> {
   final TextEditingController userCtrl = TextEditingController();
   final TextEditingController pwdCtrl = TextEditingController();
   final TextEditingController codeCtrl = TextEditingController();
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Map && args.containsKey('account')) {
+      userCtrl.text = args['account'] ?? '';
+    }
+    if (args is Map && args.containsKey('password')) {
+      pwdCtrl.text = args['password'] ?? '';
+    }
+  }
   bool isPhone = true;
   final String backendCode = '123456';
 
@@ -144,13 +159,13 @@ class _LoginFormState extends State<_LoginForm> {
         TextField(
           controller: userCtrl,
           decoration: InputDecoration(
-            labelText: isPhone ? '手机号' : '邮箱/账号',
+            labelText: isPhone ? '手机号' : '手机号/邮箱/账号',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
             prefixIcon: Icon(isPhone ? Icons.phone : Icons.email),
             suffixIcon: IconButton(
               icon: Icon(Icons.swap_horiz),
               tooltip: isPhone ? '切换邮箱/账号登录' : '切换手机号验证码登录',
-              onPressed: () {
+              onPressed: () async {
                 setState(() {
                   isPhone = !isPhone;
                   userCtrl.clear();
@@ -160,7 +175,7 @@ class _LoginFormState extends State<_LoginForm> {
               },
             ),
           ),
-          keyboardType: isPhone ? TextInputType.phone : TextInputType.emailAddress,
+          keyboardType: isPhone ? TextInputType.phone : TextInputType.text,
         ),
         SizedBox(height: 16),
         if (isPhone) ...[
@@ -196,19 +211,21 @@ class _LoginFormState extends State<_LoginForm> {
               backgroundColor: Colors.blueAccent,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
             ),
-            onPressed: () {
+            onPressed: () async {
               if (userCtrl.text.isEmpty || codeCtrl.text.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('请填写手机号和验证码')),
                 );
                 return;
               }
-              if (codeCtrl.text != backendCode) {
+              // 校验手机号格式
+              if (!RegExp(r'^1[3-9]\d{9}\$').hasMatch(userCtrl.text)) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('验证码错误')),
+                  SnackBar(content: Text('请输入正确的手机号')),
                 );
                 return;
               }
+              // TODO: 调用后端接口校验验证码并登录/注册
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text('登录/注册成功（模拟）')),
               );
@@ -232,16 +249,31 @@ class _LoginFormState extends State<_LoginForm> {
               backgroundColor: Colors.blueAccent,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
             ),
-            onPressed: () {
+            onPressed: () async {
               if (userCtrl.text.isEmpty || pwdCtrl.text.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('请填写账号/邮箱和密码')),
+                  SnackBar(content: Text('请填写手机号/邮箱/账号和密码')),
                 );
                 return;
               }
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('登录成功（模拟）')),
+              // 如果是手机号且输入为手机号，校验手机号格式
+              if (RegExp(r'^1[3-9]\d{9} ').hasMatch(userCtrl.text)) {
+                // 手机号格式正确，允许登录
+              } else if (userCtrl.text.contains('@')) {
+                // 邮箱格式，允许登录
+              } else {
+                // 账号格式（允许任意非空字符串）
+              }
+              final resp = await Api.login(
+                account: userCtrl.text,
+                password: pwdCtrl.text,
               );
+              if (resp['success'] == true) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('登录成功')));
+                // 可跳转主页
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(resp['msg'] ?? '登录失败')));
+              }
             },
             child: Text('登录', style: TextStyle(fontSize: 18)),
           ),
