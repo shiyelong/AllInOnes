@@ -2,6 +2,18 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class Api {
+  static Future<Map<String, dynamic>> validateToken(String token) async {
+    // 假设后端有 /api/validate-token 接口
+    final resp = await http.post(
+      Uri.parse('http://localhost:3001/api/validate-token'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (resp.statusCode == 200) {
+      return jsonDecode(resp.body);
+    }
+    return {'success': false, 'msg': 'token校验失败'};
+  }
+
   static const String _base = 'http://localhost:3001/api';
 
   // 获取验证码图片

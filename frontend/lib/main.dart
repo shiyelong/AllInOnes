@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'modules/auth/login/login_page.dart';
 import 'modules/auth/register/register_page.dart';
+import 'modules/social/social_main_page.dart';
+import 'utils/auto_login.dart';
 
 void main() {
   runApp(const MyApp());
@@ -34,8 +36,9 @@ class MyApp extends StatelessWidget {
       ),
       initialRoute: '/login',
       routes: {
-        '/login': (context) => LoginPage(),
+        '/login': (context) => AutoLoginGate(child: LoginPage()),
         '/register': (context) => RegisterPage(),
+        '/social': (context) => SocialMainPage(),
       },
     );
   }

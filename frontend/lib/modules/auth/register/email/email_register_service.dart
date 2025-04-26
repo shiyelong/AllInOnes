@@ -1,5 +1,6 @@
 class EmailRegisterService {
   static String generateLocalCode() {
-    return List.generate(6, (index) => (index + 1).toString()).join();
+    final rand = List.generate(6, (index) => (DateTime.now().millisecondsSinceEpoch + index * 43) % 10);
+    return rand.join();
   }
 }

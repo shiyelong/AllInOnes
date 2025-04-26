@@ -4,9 +4,12 @@ import (
 	"net/http"
 	"github.com/gin-gonic/gin"
 	"allinone_backend/internal/auth/captcha"
+	"allinone_backend/utils"
+	"allinone_backend/models"
+	"time"
+	"golang.org/x/crypto/bcrypt"
 )
 
-var UserDB = map[string]string{} // 仅示例，实际请用数据库
 
 type RegisterRequest struct {
 	Account      string `json:"account"`
@@ -25,10 +28,30 @@ func RegisterHandler(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"success": false, "msg": "验证码错误"})
 		return
 	}
-	if _, ok := UserDB[req.Account]; ok {
+	// 检查账号是否已存在
+	var count int64
+	err := utils.DB.Model(&models.User{}).Where("account = ?", req.Account).Count(&count).Error
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "msg": "数据库错误"})
+		return
+	}
+	if count > 0 {
 		c.JSON(http.StatusOK, gin.H{"success": false, "msg": "账号已存在"})
 		return
 	}
-	UserDB[req.Account] = req.Password
+	hashedPwd, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "msg": "密码加密失败"})
+		return
+	}
+	user := models.User{
+		Account: req.Account,
+		Password: string(hashedPwd),
+		CreatedAt: time.Now().Unix(),
+	}
+	if err := utils.DB.Create(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "msg": "注册失败"})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "msg": "注册成功"})
 }

@@ -1,6 +1,7 @@
 class PhoneRegisterService {
   // 本地生成6位验证码
   static String generateLocalCode() {
-    return List.generate(6, (index) => (index + 1).toString()).join();
+    final rand = List.generate(6, (index) => (DateTime.now().millisecondsSinceEpoch + index * 37) % 10);
+    return rand.join();
   }
 }
