@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'profile/profile_page.dart';
 import 'chat/chat_page.dart';
 import 'moments/moments_page.dart';
@@ -124,7 +125,38 @@ class _SocialMainPageState extends State<SocialMainPage> {
                 Spacer(),
                 // “我的”按钮固定左下
                 GestureDetector(
-                  onTap: () {/* TODO: 头像切换/个人中心 */},
+                  onTap: () async {
+                    final result = await showModalBottomSheet<String>(
+                      context: context,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                      ),
+                      builder: (ctx) => SafeArea(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ListTile(
+                              leading: Icon(Icons.switch_account, color: Colors.blueAccent),
+                              title: Text('切换账号'),
+                              onTap: () => Navigator.of(ctx).pop('switch'),
+                            ),
+                            ListTile(
+                              leading: Icon(Icons.logout, color: Colors.redAccent),
+                              title: Text('注销账号', style: TextStyle(color: Colors.redAccent)),
+                              onTap: () => Navigator.of(ctx).pop('logout'),
+                            ),
+                            SizedBox(height: 8),
+                          ],
+                        ),
+                      ),
+                    );
+                    if (result == 'logout' || result == 'switch') {
+                      // 清除本地token并跳转登录页
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.clear();
+                      if (mounted) Navigator.of(context).pushNamedAndRemoveUntil('/login', (r) => false);
+                    }
+                  },
                   child: Padding(
                     padding: EdgeInsets.only(bottom: 16),
                     child: Column(
@@ -141,9 +173,7 @@ class _SocialMainPageState extends State<SocialMainPage> {
           ),
           // 主内容区
           Expanded(
-            child: Center(
-              child: Text('${mainTabs[mainTabIndex]} - ${subTabs[mainTabIndex][subTabIndex]['label']}模块'),
-            ),
+            child: _buildMainContent(),
           ),
         ],
       ),
@@ -259,6 +289,16 @@ class _SocialMainPageState extends State<SocialMainPage> {
           ),
         );
       }
+    );
+  }
+
+  Widget _buildMainContent() {
+    // 仅在社交-聊天页显示 ChatPage，其余显示默认文本
+    if (mainTabIndex == 0 && subTabIndex == 0) {
+      return ChatPage();
+    }
+    return Center(
+      child: Text('${mainTabs[mainTabIndex]} - ${subTabs[mainTabIndex][subTabIndex]['label']}模块'),
     );
   }
 

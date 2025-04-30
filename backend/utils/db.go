@@ -17,6 +17,8 @@ func InitDB() error {
 	err = db.AutoMigrate(
 		&models.User{},
 		&models.ChatMessage{},
+		&models.Friend{},
+		&models.FriendRequest{},
 	)
 	if err != nil {
 		return err

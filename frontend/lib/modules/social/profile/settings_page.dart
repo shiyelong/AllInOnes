@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'widgets/friend_add_mode_switcher.dart';
 
 /// 通用设置页，后续可扩展各端个性化设置项
 class SettingsPage extends StatelessWidget {
+
   const SettingsPage({super.key});
 
   @override
@@ -12,29 +14,35 @@ class SettingsPage extends StatelessWidget {
         centerTitle: true,
       ),
       body: ListView(
-        children: const [
+        children: [
           ListTile(
-            leading: Icon(Icons.language),
-            title: Text('语言/Language'),
-            trailing: Icon(Icons.chevron_right),
+            leading: Icon(Icons.verified_user),
+            title: Text('加好友方式'),
+            subtitle: FriendAddModeSwitcher(),
           ),
-          Divider(height: 1),
+          const Divider(height: 1),
           ListTile(
-            leading: Icon(Icons.devices_other),
-            title: Text('设备管理'),
-            trailing: Icon(Icons.chevron_right),
+            leading: const Icon(Icons.language),
+            title: const Text('语言/Language'),
+            trailing: const Icon(Icons.chevron_right),
           ),
-          Divider(height: 1),
+          const Divider(height: 1),
           ListTile(
-            leading: Icon(Icons.security),
-            title: Text('隐私与安全'),
-            trailing: Icon(Icons.chevron_right),
+            leading: const Icon(Icons.devices_other),
+            title: const Text('设备管理'),
+            trailing: const Icon(Icons.chevron_right),
           ),
-          Divider(height: 1),
+          const Divider(height: 1),
           ListTile(
-            leading: Icon(Icons.info_outline),
-            title: Text('关于'),
-            trailing: Icon(Icons.chevron_right),
+            leading: const Icon(Icons.security),
+            title: const Text('隐私与安全'),
+            trailing: const Icon(Icons.chevron_right),
+          ),
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.info_outline),
+            title: const Text('关于'),
+            trailing: const Icon(Icons.chevron_right),
           ),
         ],
       ),

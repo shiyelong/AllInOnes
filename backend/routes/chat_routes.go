@@ -11,5 +11,7 @@ func RegisterChatRoutes(r *gin.Engine) {
 	{
 		chat.POST("/single", controllers.SingleChat)
 		chat.POST("/group", controllers.GroupChat)
+		chat.GET("/recent", controllers.GetRecentChats)
+		chat.GET("/sync", controllers.SyncMessages)
 	}
 }
