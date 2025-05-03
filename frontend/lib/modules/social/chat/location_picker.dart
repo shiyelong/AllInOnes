@@ -103,13 +103,38 @@ class _LocationPickerDialogState extends State<LocationPickerDialog> {
 
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks[0];
+        // 构建更友好的地址格式
+        final components = <String>[];
+
+        if (place.street != null && place.street!.isNotEmpty) {
+          components.add(place.street!);
+        }
+
+        if (place.subLocality != null && place.subLocality!.isNotEmpty) {
+          components.add(place.subLocality!);
+        }
+
+        if (place.locality != null && place.locality!.isNotEmpty) {
+          components.add(place.locality!);
+        }
+
+        if (place.administrativeArea != null && place.administrativeArea!.isNotEmpty) {
+          components.add(place.administrativeArea!);
+        }
+
+        if (place.country != null && place.country!.isNotEmpty) {
+          components.add(place.country!);
+        }
+
+        // 过滤掉空字符串并用逗号连接
+        final formattedAddress = components.where((s) => s.isNotEmpty).join(', ');
+
         setState(() {
-          _currentAddress =
-              '${place.street}, ${place.subLocality}, ${place.locality}, ${place.administrativeArea}, ${place.country}';
+          _currentAddress = formattedAddress.isNotEmpty ? formattedAddress : '未知地址';
         });
       }
     } catch (e) {
-      print('获取地址失败: $e');
+      debugPrint('获取地址失败: $e');
       setState(() {
         _currentAddress = '未知地址';
       });
@@ -366,13 +391,38 @@ class _LiveLocationSharingDialogState extends State<LiveLocationSharingDialog> {
 
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks[0];
+        // 构建更友好的地址格式
+        final components = <String>[];
+
+        if (place.street != null && place.street!.isNotEmpty) {
+          components.add(place.street!);
+        }
+
+        if (place.subLocality != null && place.subLocality!.isNotEmpty) {
+          components.add(place.subLocality!);
+        }
+
+        if (place.locality != null && place.locality!.isNotEmpty) {
+          components.add(place.locality!);
+        }
+
+        if (place.administrativeArea != null && place.administrativeArea!.isNotEmpty) {
+          components.add(place.administrativeArea!);
+        }
+
+        if (place.country != null && place.country!.isNotEmpty) {
+          components.add(place.country!);
+        }
+
+        // 过滤掉空字符串并用逗号连接
+        final formattedAddress = components.where((s) => s.isNotEmpty).join(', ');
+
         setState(() {
-          _currentAddress =
-              '${place.street}, ${place.subLocality}, ${place.locality}, ${place.administrativeArea}, ${place.country}';
+          _currentAddress = formattedAddress.isNotEmpty ? formattedAddress : '未知地址';
         });
       }
     } catch (e) {
-      print('获取地址失败: $e');
+      debugPrint('获取地址失败: $e');
       setState(() {
         _currentAddress = '未知地址';
       });

@@ -10,6 +10,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../../common/theme_manager.dart';
 import '../../../common/text_sanitizer.dart';
 import '../../../common/file_utils.dart';
+import '../../../common/enhanced_file_utils.dart';
 
 class ChatMessageItem extends StatefulWidget {
   final Map<String, dynamic> message;
@@ -478,9 +479,18 @@ class _ChatMessageItemState extends State<ChatMessageItem> {
                 // 本地文件，检查是否存在
                 final validPath = FileUtils.getValidFilePath(filePath);
                 if (await FileUtils.fileExists(validPath)) {
+                  // 保存文件元数据
+                  await EnhancedFileUtils.saveFileMetadata({
+                    'path': validPath,
+                    'file_name': fileName,
+                    'type': 'file',
+                    'original_url': message['original_url'] ?? '',
+                    'created_at': message['created_at'] ?? DateTime.now().millisecondsSinceEpoch ~/ 1000,
+                  });
+
                   // 显示文件预览或打开文件
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('文件已保存在: $validPath')),
+                    SnackBar(content: Text('正在打开文件: $fileName')),
                   );
 
                   // 尝试打开文件
@@ -499,10 +509,39 @@ class _ChatMessageItemState extends State<ChatMessageItem> {
                   }
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('文件不存在或已被删除')),
+                    SnackBar(content: Text('文件不存在，正在尝试恢复...')),
                   );
 
-                  // 尝试从原始URL重新下载
+                  // 尝试从文件元数据中恢复
+                  final fileMetadata = await EnhancedFileUtils.getFileMetadataByPath(filePath);
+                  if (fileMetadata != null) {
+                    // 尝试验证和恢复文件
+                    final recoveredPath = await EnhancedFileUtils.verifyAndRecoverFile(fileMetadata);
+                    if (recoveredPath.isNotEmpty && await FileUtils.fileExists(recoveredPath)) {
+                      setState(() {
+                        message['content'] = recoveredPath;
+                      });
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('文件已恢复，正在打开...')),
+                      );
+
+                      // 尝试打开恢复的文件
+                      try {
+                        final result = await FileUtils.openFile(recoveredPath);
+                        if (!result) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('无法打开文件，请使用其他应用打开')),
+                          );
+                        }
+                      } catch (e) {
+                        debugPrint('打开恢复的文件失败: $e');
+                      }
+                      return;
+                    }
+                  }
+
+                  // 如果元数据恢复失败，尝试从原始URL重新下载
                   final originalUrl = message['original_url'];
                   if (originalUrl != null && originalUrl.isNotEmpty &&
                       (originalUrl.startsWith('http://') || originalUrl.startsWith('https://'))) {
@@ -512,18 +551,40 @@ class _ChatMessageItemState extends State<ChatMessageItem> {
                     );
 
                     try {
-                      final result = await FileUtils.downloadAndSaveFile(originalUrl);
+                      final result = await EnhancedFileUtils.downloadAndSaveFileEnhanced(
+                        originalUrl,
+                        customFileName: fileName,
+                        fileType: 'file',
+                      );
+
                       if (result['path']!.isNotEmpty) {
                         // 更新消息中的文件路径
-                        message['content'] = result['path'];
-                        message['file_name'] = result['name'];
+                        setState(() {
+                          message['content'] = result['path'];
+                          message['file_name'] = result['name'];
+                        });
 
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text('文件已重新下载: ${result['name']}')),
                         );
+
+                        // 尝试打开文件
+                        try {
+                          final openResult = await FileUtils.openFile(result['path']!);
+                          if (!openResult) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('无法打开文件，请使用其他应用打开')),
+                            );
+                          }
+                        } catch (e) {
+                          debugPrint('打开下载的文件失败: $e');
+                        }
                       }
                     } catch (e) {
                       debugPrint('重新下载文件失败: $e');
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('重新下载文件失败: $e')),
+                      );
                     }
                   }
                 }
@@ -534,12 +595,19 @@ class _ChatMessageItemState extends State<ChatMessageItem> {
                 );
 
                 try {
-                  final result = await FileUtils.downloadAndSaveFile(filePath);
+                  final result = await EnhancedFileUtils.downloadAndSaveFileEnhanced(
+                    filePath,
+                    customFileName: fileName,
+                    fileType: 'file',
+                  );
+
                   if (result['path']!.isNotEmpty) {
                     // 更新消息中的文件路径
-                    message['content'] = result['path'];
-                    message['file_name'] = result['name'];
-                    message['original_url'] = filePath;
+                    setState(() {
+                      message['content'] = result['path'];
+                      message['file_name'] = result['name'];
+                      message['original_url'] = filePath;
+                    });
 
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text('文件已下载: ${result['name']}')),

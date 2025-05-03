@@ -1287,17 +1287,30 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                   size: 24,
                 ),
                 onPressed: () {
-                  // 确保输入框获得焦点，这样表情可以插入到输入框中
-                  FocusScope.of(context).requestFocus(FocusNode());
-
-                  // 延迟一下再显示表情选择器，确保键盘已经收起
-                  Future.delayed(Duration(milliseconds: 100), () {
-                    if (mounted) {
-                      setState(() {
-                        _showEmoji = !_showEmoji;
-                      });
-                    }
+                  // 切换表情选择器状态
+                  setState(() {
+                    _showEmoji = !_showEmoji;
                   });
+
+                  if (_showEmoji) {
+                    // 如果显示表情选择器，确保输入框获得焦点
+                    FocusScope.of(context).requestFocus(FocusNode());
+                  } else {
+                    // 如果隐藏表情选择器，重新聚焦到输入框
+                    FocusScope.of(context).requestFocus(FocusNode());
+                    // 延迟一下再聚焦到输入框，确保表情选择器已经收起
+                    Future.delayed(Duration(milliseconds: 100), () {
+                      if (mounted) {
+                        // 创建一个新的焦点节点并请求焦点
+                        final focusNode = FocusNode();
+                        FocusScope.of(context).requestFocus(focusNode);
+                        // 确保输入框获得焦点
+                        _messageController.selection = TextSelection.fromPosition(
+                          TextPosition(offset: _messageController.text.length),
+                        );
+                      }
+                    });
+                  }
                 },
               ),
               IconButton(

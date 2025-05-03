@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'text_sanitizer.dart';
 import 'file_utils.dart';
+import 'enhanced_file_utils.dart';
 import 'api.dart';
 
 /// 本地消息存储服务
@@ -248,7 +249,14 @@ class LocalMessageStorage {
       if (content.startsWith('file://') || content.startsWith('/')) {
         final filePath = FileUtils.getValidFilePath(content);
         if (await FileUtils.fileExists(filePath)) {
-          // 文件存在，直接返回
+          // 文件存在，保存文件元数据
+          await EnhancedFileUtils.saveFileMetadata({
+            'path': filePath,
+            'file_name': fileName,
+            'type': 'file',
+            'original_url': message['original_url'] ?? '',
+            'created_at': message['created_at'] ?? DateTime.now().millisecondsSinceEpoch ~/ 1000,
+          });
           return;
         }
 
@@ -257,31 +265,34 @@ class LocalMessageStorage {
         if (originalUrl != null && originalUrl.isNotEmpty &&
             (originalUrl.startsWith('http://') || originalUrl.startsWith('https://'))) {
 
-          // 生成唯一文件名，保留原始扩展名
-          final uniqueFileName = _generateUniqueFileName(fileName);
-          final localPath = '${mediaDir.path}/$uniqueFileName';
+          // 使用增强版下载方法
+          final result = await EnhancedFileUtils.downloadAndSaveFileEnhanced(
+            originalUrl,
+            customFileName: fileName,
+            fileType: 'file',
+          );
 
-          // 下载文件
-          final success = await _downloadFile(originalUrl, localPath);
-          if (success) {
-            message['content'] = localPath;
+          if (result['path']!.isNotEmpty) {
+            message['content'] = result['path'];
             message['file_name'] = fileName;
-            debugPrint('[LocalMessageStorage] 文件已重新下载并保存到本地: $localPath');
+            debugPrint('[LocalMessageStorage] 文件已重新下载并保存到本地: ${result['path']}');
           }
         }
       }
       // 处理网络URL
       else if (content.startsWith('http://') || content.startsWith('https://')) {
-        // 生成唯一文件名，保留原始扩展名
-        final uniqueFileName = _generateUniqueFileName(fileName);
-        final localPath = '${mediaDir.path}/$uniqueFileName';
+        // 使用增强版下载方法
+        final result = await EnhancedFileUtils.downloadAndSaveFileEnhanced(
+          content,
+          customFileName: fileName,
+          fileType: 'file',
+        );
 
-        // 下载文件
-        final success = await _downloadFile(content, localPath);
-        if (success) {
-          message['content'] = localPath;
+        if (result['path']!.isNotEmpty) {
+          message['content'] = result['path'];
           message['file_name'] = fileName;
-          debugPrint('[LocalMessageStorage] 文件已下载并保存到本地: $localPath');
+          message['original_url'] = content;
+          debugPrint('[LocalMessageStorage] 文件已下载并保存到本地: ${result['path']}');
         }
       }
     } catch (e) {
@@ -599,41 +610,68 @@ class LocalMessageStorage {
         if (!await FileUtils.fileExists(filePath)) {
           debugPrint('[LocalMessageStorage] 本地文件不存在: $filePath');
 
-          // 尝试从原始URL重新下载
+          // 尝试从文件元数据中恢复
+          final fileMetadata = await EnhancedFileUtils.getFileMetadataByPath(content);
+          if (fileMetadata != null) {
+            // 尝试验证和恢复文件
+            final recoveredPath = await EnhancedFileUtils.verifyAndRecoverFile(fileMetadata);
+            if (recoveredPath.isNotEmpty && await FileUtils.fileExists(recoveredPath)) {
+              message['content'] = recoveredPath;
+              debugPrint('[LocalMessageStorage] 文件已从元数据恢复: $recoveredPath');
+              return;
+            }
+          }
+
+          // 如果元数据恢复失败，尝试从原始URL重新下载
           final originalUrl = message['original_url'];
           if (originalUrl != null && originalUrl.isNotEmpty &&
               (originalUrl.startsWith('http://') || originalUrl.startsWith('https://'))) {
 
             debugPrint('[LocalMessageStorage] 尝试从原始URL重新下载文件: $originalUrl');
 
-            // 生成唯一文件名
-            final uniqueFileName = _generateUniqueFileName(fileName);
-            final localPath = '${mediaDir.path}/$uniqueFileName';
+            // 使用增强版下载方法
+            final result = await EnhancedFileUtils.downloadAndSaveFileEnhanced(
+              originalUrl,
+              customFileName: fileName,
+              fileType: 'file',
+            );
 
-            // 下载文件
-            final success = await _downloadFile(originalUrl, localPath);
-            if (success) {
-              message['content'] = localPath;
+            if (result['path']!.isNotEmpty) {
+              message['content'] = result['path'];
               message['file_name'] = fileName;
-              debugPrint('[LocalMessageStorage] 文件已重新下载并保存到本地: $localPath');
+              debugPrint('[LocalMessageStorage] 文件已重新下载并保存到本地: ${result['path']}');
             } else {
               // 如果从原始URL下载失败，尝试从API服务器获取
               if (message['id'] != null) {
                 final fileUrl = '${Api.baseUrl}/api/chat/file/${message['id']}';
                 debugPrint('[LocalMessageStorage] 尝试从API服务器获取文件: $fileUrl');
 
-                final success = await _downloadFile(fileUrl, localPath);
-                if (success) {
-                  message['content'] = localPath;
+                final result = await EnhancedFileUtils.downloadAndSaveFileEnhanced(
+                  fileUrl,
+                  customFileName: fileName,
+                  fileType: 'file',
+                );
+
+                if (result['path']!.isNotEmpty) {
+                  message['content'] = result['path'];
                   message['file_name'] = fileName;
                   message['original_url'] = fileUrl;
-                  debugPrint('[LocalMessageStorage] 文件已从API服务器下载并保存到本地: $localPath');
+                  debugPrint('[LocalMessageStorage] 文件已从API服务器下载并保存到本地: ${result['path']}');
                 }
               }
             }
           }
         } else {
           debugPrint('[LocalMessageStorage] 本地文件存在: $filePath');
+
+          // 确保文件元数据已保存
+          await EnhancedFileUtils.saveFileMetadata({
+            'path': filePath,
+            'file_name': fileName,
+            'type': 'file',
+            'original_url': message['original_url'] ?? '',
+            'created_at': message['created_at'] ?? DateTime.now().millisecondsSinceEpoch ~/ 1000,
+          });
         }
       }
       // 如果内容是网络URL，下载并保存
@@ -641,16 +679,17 @@ class LocalMessageStorage {
         message['original_url'] = content;
         debugPrint('[LocalMessageStorage] 发现网络文件URL，尝试下载: $content');
 
-        // 生成唯一文件名
-        final uniqueFileName = _generateUniqueFileName(fileName);
-        final localPath = '${mediaDir.path}/$uniqueFileName';
+        // 使用增强版下载方法
+        final result = await EnhancedFileUtils.downloadAndSaveFileEnhanced(
+          content,
+          customFileName: fileName,
+          fileType: 'file',
+        );
 
-        // 下载文件
-        final success = await _downloadFile(content, localPath);
-        if (success) {
-          message['content'] = localPath;
+        if (result['path']!.isNotEmpty) {
+          message['content'] = result['path'];
           message['file_name'] = fileName;
-          debugPrint('[LocalMessageStorage] 文件已下载并保存到本地: $localPath');
+          debugPrint('[LocalMessageStorage] 文件已下载并保存到本地: ${result['path']}');
         }
       }
     } catch (e) {

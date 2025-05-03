@@ -42,6 +42,19 @@ class _ChatInputState extends State<ChatInput> {
       _showEmoji = !_showEmoji;
       if (_showEmoji) {
         _showMoreOptions = false;
+
+        // 确保输入框获得焦点
+        FocusScope.of(context).requestFocus(FocusNode());
+
+        // 延迟一下再设置光标位置，确保表情选择器已经显示
+        Future.delayed(Duration(milliseconds: 100), () {
+          if (mounted) {
+            // 确保输入框获得焦点并设置光标位置
+            _controller.selection = TextSelection.fromPosition(
+              TextPosition(offset: _controller.text.length),
+            );
+          }
+        });
       }
     });
   }
@@ -231,7 +244,18 @@ class _ChatInputState extends State<ChatInput> {
             height: 200,
             child: EmojiPicker(
               onSelected: (emoji) {
-                if (widget.onSendEmoji != null) widget.onSendEmoji!(emoji);
+                // 始终将表情插入到输入框
+                final currentText = _controller.text;
+                final selection = _controller.selection;
+                final newText = currentText.replaceRange(
+                  selection.start,
+                  selection.end,
+                  emoji,
+                );
+                _controller.text = newText;
+                _controller.selection = TextSelection.collapsed(
+                  offset: selection.baseOffset + emoji.length,
+                );
               },
             ),
           ),

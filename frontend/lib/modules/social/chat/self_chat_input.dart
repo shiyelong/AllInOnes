@@ -43,6 +43,19 @@ class _SelfChatInputState extends State<SelfChatInput> {
       _showEmoji = !_showEmoji;
       if (_showEmoji) {
         _showMoreOptions = false;
+
+        // 确保输入框获得焦点
+        FocusScope.of(context).requestFocus(FocusNode());
+
+        // 延迟一下再设置光标位置，确保表情选择器已经显示
+        Future.delayed(Duration(milliseconds: 100), () {
+          if (mounted) {
+            // 确保输入框获得焦点并设置光标位置
+            _controller.selection = TextSelection.fromPosition(
+              TextPosition(offset: _controller.text.length),
+            );
+          }
+        });
       }
     });
   }
