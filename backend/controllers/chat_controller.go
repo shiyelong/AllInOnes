@@ -4,6 +4,7 @@ import (
 	"allinone_backend/models"
 	"allinone_backend/repositories"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -141,8 +142,237 @@ func GetMessagesByUser(c *gin.Context) {
 
 // 群聊消息发送
 func GroupChat(c *gin.Context) {
-	// 简化实现，实际应该处理群聊消息
-	c.JSON(200, gin.H{"success": true, "msg": "群聊功能开发中"})
+	// 获取当前用户ID
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(401, gin.H{"success": false, "msg": "未授权"})
+		return
+	}
+
+	// 解析请求参数
+	var req struct {
+		GroupID        uint   `json:"group_id" binding:"required"`
+		Content        string `json:"content" binding:"required"`
+		Type           string `json:"type" binding:"required"`
+		MentionedUsers []uint `json:"mentioned_users"`
+		Extra          string `json:"extra"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"success": false, "msg": "参数错误"})
+		return
+	}
+
+	// 检查用户是否在群组中
+	db := c.MustGet("db").(*gorm.DB)
+	var groupMember models.GroupMember
+	if err := db.Where("group_id = ? AND user_id = ?", req.GroupID, userID).First(&groupMember).Error; err != nil {
+		c.JSON(403, gin.H{"success": false, "msg": "您不是该群组成员"})
+		return
+	}
+
+	// 检查群组是否存在
+	var group models.Group
+	if err := db.First(&group, req.GroupID).Error; err != nil {
+		c.JSON(404, gin.H{"success": false, "msg": "群组不存在"})
+		return
+	}
+
+	// 检查用户是否被禁言
+	if groupMember.Muted {
+		// 检查禁言是否已过期
+		if groupMember.MutedUntil > 0 && groupMember.MutedUntil < time.Now().Unix() {
+			// 禁言已过期，解除禁言
+			groupMember.Muted = false
+			groupMember.MutedUntil = 0
+			db.Save(&groupMember)
+		} else {
+			c.JSON(403, gin.H{"success": false, "msg": "您已被禁言"})
+			return
+		}
+	}
+
+	// 处理@用户
+	var mentionedUsersStr string
+	if len(req.MentionedUsers) > 0 {
+		// 检查被@的用户是否在群组中
+		var validMentionedUsers []uint
+		for _, mentionedUserID := range req.MentionedUsers {
+			var mentionedGroupMember models.GroupMember
+			if err := db.Where("group_id = ? AND user_id = ?", req.GroupID, mentionedUserID).First(&mentionedGroupMember).Error; err == nil {
+				validMentionedUsers = append(validMentionedUsers, mentionedUserID)
+			}
+		}
+
+		// 将有效的@用户ID转换为字符串
+		if len(validMentionedUsers) > 0 {
+			for i, id := range validMentionedUsers {
+				if i > 0 {
+					mentionedUsersStr += ","
+				}
+				mentionedUsersStr += strconv.FormatUint(uint64(id), 10)
+			}
+		}
+	}
+
+	// 创建消息
+	message := models.ChatMessage{
+		SenderID:       userID.(uint),
+		GroupID:        req.GroupID,
+		Content:        req.Content,
+		Type:           req.Type,
+		Extra:          req.Extra,
+		MentionedUsers: mentionedUsersStr,
+		Status:         1, // 已发送
+		CreatedAt:      time.Now().Unix(),
+	}
+
+	// 保存消息
+	if err := db.Create(&message).Error; err != nil {
+		c.JSON(500, gin.H{"success": false, "msg": "消息保存失败"})
+		return
+	}
+
+	// 更新群组成员的最后活跃时间
+	groupMember.LastActive = time.Now().Unix()
+	groupMember.IsActive = true
+	db.Save(&groupMember)
+
+	// TODO: WebSocket 推送实时消息
+
+	c.JSON(200, gin.H{
+		"success": true,
+		"msg":     "发送成功",
+		"data": gin.H{
+			"id":              message.ID,
+			"sender_id":       message.SenderID,
+			"group_id":        message.GroupID,
+			"content":         message.Content,
+			"type":            message.Type,
+			"extra":           message.Extra,
+			"mentioned_users": message.MentionedUsers,
+			"status":          message.Status,
+			"created_at":      message.CreatedAt,
+		},
+	})
+}
+
+// 获取群聊消息
+func GetGroupMessages(c *gin.Context) {
+	// 获取当前用户ID
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(401, gin.H{"success": false, "msg": "未授权"})
+		return
+	}
+
+	// 解析请求参数
+	groupIDStr := c.Query("group_id")
+	limitStr := c.Query("limit")
+	offsetStr := c.Query("offset")
+
+	if groupIDStr == "" {
+		c.JSON(400, gin.H{"success": false, "msg": "缺少group_id参数"})
+		return
+	}
+
+	groupID, err := strconv.ParseUint(groupIDStr, 10, 32)
+	if err != nil {
+		c.JSON(400, gin.H{"success": false, "msg": "无效的group_id参数"})
+		return
+	}
+
+	// 设置默认值
+	limit := 20
+	offset := 0
+
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			limit = l
+		}
+	}
+
+	if offsetStr != "" {
+		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
+			offset = o
+		}
+	}
+
+	// 检查用户是否在群组中
+	db := c.MustGet("db").(*gorm.DB)
+	var groupMember models.GroupMember
+	if err := db.Where("group_id = ? AND user_id = ?", groupID, userID).First(&groupMember).Error; err != nil {
+		c.JSON(403, gin.H{"success": false, "msg": "您不是该群组成员"})
+		return
+	}
+
+	// 查询群组消息
+	var messages []models.ChatMessage
+	if err := db.Where("group_id = ?", groupID).Order("created_at DESC").Limit(limit).Offset(offset).Find(&messages).Error; err != nil {
+		c.JSON(500, gin.H{"success": false, "msg": "查询消息失败"})
+		return
+	}
+
+	// 获取发送者信息
+	var senderIDs []uint
+	for _, msg := range messages {
+		senderIDs = append(senderIDs, msg.SenderID)
+	}
+
+	// 查询发送者信息
+	var users []models.User
+	db.Where("id IN ?", senderIDs).Find(&users)
+
+	// 构建用户映射
+	userMap := make(map[uint]models.User)
+	for _, user := range users {
+		userMap[user.ID] = user
+	}
+
+	// 构造响应数据
+	var result []gin.H
+	for _, msg := range messages {
+		sender, exists := userMap[msg.SenderID]
+		senderNickname := ""
+		senderAvatar := ""
+		if exists {
+			senderNickname = sender.Nickname
+			senderAvatar = sender.Avatar
+		}
+
+		// 处理@用户
+		var mentionedUsersList []uint
+		if msg.MentionedUsers != "" {
+			mentionedUsersStr := strings.Split(msg.MentionedUsers, ",")
+			for _, idStr := range mentionedUsersStr {
+				if id, err := strconv.ParseUint(idStr, 10, 32); err == nil {
+					mentionedUsersList = append(mentionedUsersList, uint(id))
+				}
+			}
+		}
+
+		result = append(result, gin.H{
+			"id":              msg.ID,
+			"sender_id":       msg.SenderID,
+			"group_id":        msg.GroupID,
+			"content":         msg.Content,
+			"type":            msg.Type,
+			"extra":           msg.Extra,
+			"mentioned_users": mentionedUsersList,
+			"status":          msg.Status,
+			"created_at":      msg.CreatedAt,
+			"sender_nickname": senderNickname,
+			"sender_avatar":   senderAvatar,
+			"is_mentioned":    strings.Contains(msg.MentionedUsers, strconv.FormatUint(uint64(userID.(uint)), 10)),
+		})
+	}
+
+	// 更新群组成员的最后活跃时间
+	groupMember.LastActive = time.Now().Unix()
+	groupMember.IsActive = true
+	db.Save(&groupMember)
+
+	c.JSON(200, gin.H{"success": true, "data": result})
 }
 
 // 最近聊天列表

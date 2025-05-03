@@ -16,6 +16,8 @@ func RegisterFriendsRoutes(r *gin.RouterGroup) {
 		friends.GET("/requests", controllers.GetFriendRequests)
 		friends.POST("/agree", controllers.AgreeFriendRequest)
 		friends.POST("/reject", controllers.RejectFriendRequest)
+		friends.POST("/batch/agree", controllers.BatchAgreeFriendRequests)
+		friends.POST("/batch/reject", controllers.BatchRejectFriendRequests)
 		friends.GET("/search", controllers.SearchUsers)
 		friends.GET("/mode", controllers.GetFriendAddMode)
 		friends.POST("/mode", controllers.SetFriendAddMode)

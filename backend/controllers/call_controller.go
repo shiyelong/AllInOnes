@@ -22,7 +22,7 @@ func StartVoiceCall(c *gin.Context) {
 	}
 
 	db := c.MustGet("db").(*gorm.DB)
-	
+
 	// 创建通话记录
 	call := models.VoiceCallRecord{
 		CallerID:   req.CallerID,
@@ -84,13 +84,82 @@ func EndVoiceCall(c *gin.Context) {
 	})
 }
 
+// 接受语音通话
+func AcceptVoiceCall(c *gin.Context) {
+	var req struct {
+		CallerID   uint `json:"caller_id"`
+		ReceiverID uint `json:"receiver_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "msg": "参数错误"})
+		return
+	}
+
+	db := c.MustGet("db").(*gorm.DB)
+
+	// 查找最近的未接通的通话记录
+	var call models.VoiceCallRecord
+	if err := db.Where("caller_id = ? AND receiver_id = ? AND status = 0",
+		req.CallerID, req.ReceiverID).
+		Order("start_time desc").
+		First(&call).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "msg": "通话记录不存在"})
+		return
+	}
+
+	// 更新通话记录
+	db.Model(&call).Updates(map[string]interface{}{
+		"status": 1, // 已接通
+	})
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"msg":     "已接受通话",
+		"data": gin.H{
+			"call_id": call.ID,
+		},
+	})
+}
+
 // 拒绝语音通话
 func RejectVoiceCall(c *gin.Context) {
 	var req struct {
 		CallID uint `json:"call_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "msg": "参数错误"})
+		// 尝试兼容旧版API
+		var oldReq struct {
+			CallerID   uint `json:"caller_id"`
+			ReceiverID uint `json:"receiver_id"`
+		}
+		if err := c.ShouldBindJSON(&oldReq); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "msg": "参数错误"})
+			return
+		}
+
+		// 查找最近的未接通的通话记录
+		db := c.MustGet("db").(*gorm.DB)
+		var call models.VoiceCallRecord
+		if err := db.Where("caller_id = ? AND receiver_id = ? AND status = 0",
+			oldReq.CallerID, oldReq.ReceiverID).
+			Order("start_time desc").
+			First(&call).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"success": false, "msg": "通话记录不存在"})
+			return
+		}
+
+		// 更新通话记录
+		endTime := time.Now().Unix()
+		db.Model(&call).Updates(map[string]interface{}{
+			"end_time": endTime,
+			"duration": 0,
+			"status":   2, // 已拒绝
+		})
+
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"msg":     "已拒绝通话",
+		})
 		return
 	}
 
@@ -127,7 +196,7 @@ func StartVideoCall(c *gin.Context) {
 	}
 
 	db := c.MustGet("db").(*gorm.DB)
-	
+
 	// 创建通话记录
 	call := models.VideoCallRecord{
 		CallerID:   req.CallerID,
@@ -189,13 +258,82 @@ func EndVideoCall(c *gin.Context) {
 	})
 }
 
+// 接受视频通话
+func AcceptVideoCall(c *gin.Context) {
+	var req struct {
+		CallerID   uint `json:"caller_id"`
+		ReceiverID uint `json:"receiver_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "msg": "参数错误"})
+		return
+	}
+
+	db := c.MustGet("db").(*gorm.DB)
+
+	// 查找最近的未接通的通话记录
+	var call models.VideoCallRecord
+	if err := db.Where("caller_id = ? AND receiver_id = ? AND status = 0",
+		req.CallerID, req.ReceiverID).
+		Order("start_time desc").
+		First(&call).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "msg": "通话记录不存在"})
+		return
+	}
+
+	// 更新通话记录
+	db.Model(&call).Updates(map[string]interface{}{
+		"status": 1, // 已接通
+	})
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"msg":     "已接受通话",
+		"data": gin.H{
+			"call_id": call.ID,
+		},
+	})
+}
+
 // 拒绝视频通话
 func RejectVideoCall(c *gin.Context) {
 	var req struct {
 		CallID uint `json:"call_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "msg": "参数错误"})
+		// 尝试兼容旧版API
+		var oldReq struct {
+			CallerID   uint `json:"caller_id"`
+			ReceiverID uint `json:"receiver_id"`
+		}
+		if err := c.ShouldBindJSON(&oldReq); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "msg": "参数错误"})
+			return
+		}
+
+		// 查找最近的未接通的通话记录
+		db := c.MustGet("db").(*gorm.DB)
+		var call models.VideoCallRecord
+		if err := db.Where("caller_id = ? AND receiver_id = ? AND status = 0",
+			oldReq.CallerID, oldReq.ReceiverID).
+			Order("start_time desc").
+			First(&call).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"success": false, "msg": "通话记录不存在"})
+			return
+		}
+
+		// 更新通话记录
+		endTime := time.Now().Unix()
+		db.Model(&call).Updates(map[string]interface{}{
+			"end_time": endTime,
+			"duration": 0,
+			"status":   2, // 已拒绝
+		})
+
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"msg":     "已拒绝通话",
+		})
 		return
 	}
 
@@ -230,27 +368,27 @@ func GetCallHistory(c *gin.Context) {
 	}
 
 	typeStr := c.DefaultQuery("type", "all") // all, voice, video
-	
+
 	db := c.MustGet("db").(*gorm.DB)
-	
+
 	// 获取语音通话记录
 	var voiceCalls []models.VoiceCallRecord
 	var videoCalls []models.VideoCallRecord
-	
+
 	if typeStr == "all" || typeStr == "voice" {
 		db.Where("caller_id = ? OR receiver_id = ?", userID, userID).
 			Order("start_time desc").
 			Limit(50).
 			Find(&voiceCalls)
 	}
-	
+
 	if typeStr == "all" || typeStr == "video" {
 		db.Where("caller_id = ? OR receiver_id = ?", userID, userID).
 			Order("start_time desc").
 			Limit(50).
 			Find(&videoCalls)
 	}
-	
+
 	// 构建响应
 	var voiceResp []gin.H
 	for _, call := range voiceCalls {
@@ -263,24 +401,24 @@ func GetCallHistory(c *gin.Context) {
 			peerID = call.CallerID
 			isOutgoing = false
 		}
-		
+
 		var peer models.User
 		db.First(&peer, peerID)
-		
+
 		voiceResp = append(voiceResp, gin.H{
-			"id":         call.ID,
-			"peer_id":    peerID,
-			"peer_name":  peer.Nickname,
+			"id":          call.ID,
+			"peer_id":     peerID,
+			"peer_name":   peer.Nickname,
 			"peer_avatar": peer.Avatar,
-			"start_time": call.StartTime,
-			"end_time":   call.EndTime,
-			"duration":   call.Duration,
-			"status":     call.Status,
+			"start_time":  call.StartTime,
+			"end_time":    call.EndTime,
+			"duration":    call.Duration,
+			"status":      call.Status,
 			"is_outgoing": isOutgoing,
-			"type":       "voice",
+			"type":        "voice",
 		})
 	}
-	
+
 	var videoResp []gin.H
 	for _, call := range videoCalls {
 		var peerID uint
@@ -292,29 +430,29 @@ func GetCallHistory(c *gin.Context) {
 			peerID = call.CallerID
 			isOutgoing = false
 		}
-		
+
 		var peer models.User
 		db.First(&peer, peerID)
-		
+
 		videoResp = append(videoResp, gin.H{
-			"id":         call.ID,
-			"peer_id":    peerID,
-			"peer_name":  peer.Nickname,
+			"id":          call.ID,
+			"peer_id":     peerID,
+			"peer_name":   peer.Nickname,
 			"peer_avatar": peer.Avatar,
-			"start_time": call.StartTime,
-			"end_time":   call.EndTime,
-			"duration":   call.Duration,
-			"status":     call.Status,
+			"start_time":  call.StartTime,
+			"end_time":    call.EndTime,
+			"duration":    call.Duration,
+			"status":      call.Status,
 			"is_outgoing": isOutgoing,
-			"type":       "video",
+			"type":        "video",
 		})
 	}
-	
+
 	// 合并并按时间排序
 	var allCalls []gin.H
 	allCalls = append(allCalls, voiceResp...)
 	allCalls = append(allCalls, videoResp...)
-	
+
 	// 简单的冒泡排序，按开始时间降序排列
 	for i := 0; i < len(allCalls)-1; i++ {
 		for j := 0; j < len(allCalls)-i-1; j++ {
@@ -323,7 +461,7 @@ func GetCallHistory(c *gin.Context) {
 			}
 		}
 	}
-	
+
 	var result []gin.H
 	if typeStr == "voice" {
 		result = voiceResp
@@ -332,7 +470,7 @@ func GetCallHistory(c *gin.Context) {
 	} else {
 		result = allCalls
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    result,

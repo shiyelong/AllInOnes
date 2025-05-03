@@ -73,6 +73,24 @@ func SetupRouter() *gin.Engine {
 		// 钱包相关
 		routes.RegisterWalletRoutesNew(auth)
 
+		// 红包相关
+		routes.RegisterRedPacketRoutes(auth)
+
+		// 翻译相关
+		routes.RegisterTranslationRoutes(auth)
+
+		// 语音识别相关
+		routes.RegisterSpeechRoutes(auth)
+
+		// AI相关
+		routes.RegisterAIRoutes(auth)
+
+		// WebSocket相关
+		routes.RegisterWebSocketRoutes(auth)
+
+		// 语音和视频通话相关
+		routes.SetupCallRoutes(r)
+
 		// 核心功能保留，移除非核心功能
 	}
 

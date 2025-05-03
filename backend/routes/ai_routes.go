@@ -1,6 +1,8 @@
 package routes
 
 import (
+	"allinone_backend/controllers"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -8,29 +10,23 @@ import (
 func RegisterAIRoutes(r *gin.RouterGroup) {
 	ai := r.Group("/ai")
 	{
-		// 获取AI助手回复
-		ai.POST("/chat", func(c *gin.Context) {
-			var req struct {
-				Message string `json:"message" binding:"required"`
-			}
-			if err := c.ShouldBindJSON(&req); err != nil {
-				c.JSON(400, gin.H{
-					"success": false,
-					"msg":     "请求参数错误",
-				})
-				return
-			}
+		// AI工具列表
+		ai.GET("/tools", controllers.ListAiTools)
 
-			// 简单的AI回复逻辑
-			response := "您好，我是AI助手。您的问题是：" + req.Message
-			
-			c.JSON(200, gin.H{
-				"success": true,
-				"msg":     "获取AI回复成功",
-				"data": gin.H{
-					"response": response,
-				},
-			})
-		})
+		// AI聊天历史
+		ai.GET("/history", controllers.GetAIChatHistory)
+
+		// AI设置
+		ai.GET("/settings", controllers.GetAISettings)
+		ai.PUT("/settings", controllers.UpdateAISettings)
+
+		// 个人AI助手
+		ai.POST("/personal/chat", controllers.ChatWithPersonalAI)
+
+		// 群组AI管理
+		ai.POST("/group/chat", controllers.ChatWithGroupAI)
+
+		// 游戏AI陪玩
+		ai.POST("/game/chat", controllers.ChatWithGameAI)
 	}
 }

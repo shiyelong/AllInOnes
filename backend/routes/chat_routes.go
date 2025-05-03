@@ -9,11 +9,17 @@ import (
 func RegisterChatRoutes(r *gin.RouterGroup) {
 	chat := r.Group("/chat")
 	{
+		// 单聊相关
 		chat.POST("/single", controllers.SendMessage) // 兼容旧接口
+		chat.GET("/messages", controllers.GetMessagesByUser)
+
+		// 群聊相关
 		chat.POST("/group", controllers.GroupChat)
+		chat.GET("/group/messages", controllers.GetGroupMessages)
+
+		// 聊天列表和同步
 		chat.GET("/recent", controllers.GetRecentChats)
 		chat.GET("/sync", controllers.SyncMessages)
-		chat.GET("/messages", controllers.GetMessagesByUser)
 
 		// 获取聊天列表
 		chat.GET("/list", func(c *gin.Context) {
@@ -65,13 +71,9 @@ func RegisterChatRoutes(r *gin.RouterGroup) {
 		// 红包相关
 		redpacket := chat.Group("/redpacket")
 		{
-			redpacket.POST("/send", controllers.SendRedPacket)
-			redpacket.POST("/grab", controllers.GrabRedPacket)
+			redpacket.POST("/send", controllers.CreateRedPacket)
+			redpacket.POST("/grab", controllers.ReceiveRedPacket)
 			redpacket.GET("/detail", controllers.GetRedPacketDetail)
-
-			// 新版红包接口（集成钱包系统）
-			redpacket.POST("/send/wallet", controllers.SendRedPacketWithWallet)
-			redpacket.POST("/grab/wallet", controllers.GrabRedPacketWithWallet)
 		}
 
 		// 语音视频通话
@@ -80,9 +82,11 @@ func RegisterChatRoutes(r *gin.RouterGroup) {
 			call.POST("/voice/start", controllers.StartVoiceCall)
 			call.POST("/voice/end", controllers.EndVoiceCall)
 			call.POST("/voice/reject", controllers.RejectVoiceCall)
+			call.POST("/voice/accept", controllers.AcceptVoiceCall)
 			call.POST("/video/start", controllers.StartVideoCall)
 			call.POST("/video/end", controllers.EndVideoCall)
 			call.POST("/video/reject", controllers.RejectVideoCall)
+			call.POST("/video/accept", controllers.AcceptVideoCall)
 			call.GET("/history", controllers.GetCallHistory)
 		}
 

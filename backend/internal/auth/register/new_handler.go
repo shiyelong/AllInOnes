@@ -180,6 +180,44 @@ func GenerateVerificationCode(c *gin.Context) {
 		return
 	}
 
+	// 验证格式
+	if codeType == "email" {
+		if !utils.ValidateEmail(target) {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "msg": "邮箱格式不正确"})
+			return
+		}
+	} else {
+		if !utils.ValidatePhone(target) {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "msg": "手机号格式不正确"})
+			return
+		}
+	}
+
+	// 检查是否已注册
+	var count int64
+	var err error
+
+	if codeType == "email" {
+		err = utils.DB.Model(&models.User{}).Where("email = ?", target).Count(&count).Error
+	} else {
+		err = utils.DB.Model(&models.User{}).Where("phone = ?", target).Count(&count).Error
+	}
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "msg": "数据库查询错误"})
+		return
+	}
+
+	if count > 0 {
+		// 已注册，返回错误
+		if codeType == "email" {
+			c.JSON(http.StatusOK, gin.H{"success": false, "msg": "该邮箱已被注册"})
+		} else {
+			c.JSON(http.StatusOK, gin.H{"success": false, "msg": "该手机号已被注册"})
+		}
+		return
+	}
+
 	// 生成6位随机验证码
 	code := utils.GenerateRandomCode(6)
 
@@ -188,14 +226,7 @@ func GenerateVerificationCode(c *gin.Context) {
 	utils.SaveVerificationCode(codeKey, code)
 
 	// 根据类型发送验证码
-	var err error
 	if codeType == "email" {
-		// 验证邮箱格式
-		if !utils.ValidateEmail(target) {
-			c.JSON(http.StatusBadRequest, gin.H{"success": false, "msg": "邮箱格式不正确"})
-			return
-		}
-
 		// 发送邮件验证码
 		err = utils.SendVerificationEmail(target, code)
 		if err != nil {
@@ -227,12 +258,6 @@ func GenerateVerificationCode(c *gin.Context) {
 			}
 		}
 	} else {
-		// 验证手机号格式
-		if !utils.ValidatePhone(target) {
-			c.JSON(http.StatusBadRequest, gin.H{"success": false, "msg": "手机号格式不正确"})
-			return
-		}
-
 		// 发送短信验证码
 		err = utils.SendSMSVerificationCode(target, code)
 		if err != nil {

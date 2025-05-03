@@ -1,6 +1,8 @@
 package routes
 
 import (
+	"allinone_backend/controllers"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -9,67 +11,42 @@ func RegisterWalletRoutes(r *gin.RouterGroup) {
 	wallet := r.Group("/wallet")
 	{
 		// 获取钱包信息
-		wallet.GET("/info", func(c *gin.Context) {
-			c.JSON(200, gin.H{
-				"success": true,
-				"msg":     "获取钱包信息成功",
-				"data": gin.H{
-					"balance":     1000.0,
-					"points":      500,
-					"card_count":  2,
-					"coupon_count": 3,
-				},
-			})
-		})
+		wallet.GET("/info", controllers.GetWalletInfo)
 
 		// 获取交易记录
-		wallet.GET("/transactions", func(c *gin.Context) {
-			c.JSON(200, gin.H{
-				"success": true,
-				"msg":     "获取交易记录成功",
-				"data": []gin.H{
-					{
-						"id":         1,
-						"type":       "充值",
-						"amount":     100.0,
-						"status":     "成功",
-						"created_at": 1625123456,
-					},
-					{
-						"id":         2,
-						"type":       "消费",
-						"amount":     -50.0,
-						"status":     "成功",
-						"created_at": 1625123457,
-					},
-				},
-			})
-		})
+		wallet.GET("/transactions", controllers.GetTransactions)
 
 		// 充值
-		wallet.POST("/recharge", func(c *gin.Context) {
-			c.JSON(200, gin.H{
-				"success": true,
-				"msg":     "充值成功",
-				"data": gin.H{
-					"transaction_id": 3,
-					"amount":         100.0,
-					"balance":        1100.0,
-				},
-			})
-		})
+		wallet.POST("/recharge", controllers.Recharge)
 
 		// 提现
-		wallet.POST("/withdraw", func(c *gin.Context) {
-			c.JSON(200, gin.H{
-				"success": true,
-				"msg":     "提现申请已提交",
-				"data": gin.H{
-					"transaction_id": 4,
-					"amount":         -100.0,
-					"balance":        900.0,
-				},
-			})
-		})
+		wallet.POST("/withdraw", controllers.Withdraw)
+
+		// 转账
+		wallet.POST("/transfer", controllers.Transfer)
+
+		// 银行卡相关
+		bankCard := wallet.Group("/bank-card")
+		{
+			bankCard.POST("", controllers.AddBankCard)
+			bankCard.GET("", controllers.GetBankCards)
+			bankCard.DELETE("/:id", controllers.DeleteBankCard)
+			bankCard.PUT("/:id/default", controllers.SetDefaultBankCard)
+
+			// 银行卡验证
+			bankCard.POST("/verify", controllers.InitiateBankCardVerification)
+			bankCard.POST("/verify/confirm", controllers.ConfirmBankCardVerification)
+		}
+
+		// 虚拟货币相关
+		crypto := wallet.Group("/crypto")
+		{
+			crypto.POST("", controllers.AddCryptoWallet)
+			crypto.GET("", controllers.GetCryptoWallets)
+			crypto.DELETE("/:id", controllers.DeleteCryptoWallet)
+			crypto.POST("/deposit", controllers.DepositCrypto)
+			crypto.POST("/withdraw", controllers.WithdrawCrypto)
+			crypto.GET("/transactions", controllers.GetCryptoTransactions)
+		}
 	}
 }

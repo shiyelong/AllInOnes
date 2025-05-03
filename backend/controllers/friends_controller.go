@@ -162,6 +162,24 @@ func AddFriend(c *gin.Context) {
 		return
 	}
 
+	// 检查是否有被拒绝的请求，如果有，更新为新的请求
+	var rejectedRequest models.FriendRequest
+	if err := db.Where("from_id = ? AND to_id = ? AND status = 2", userID, friendID).Order("created_at DESC").First(&rejectedRequest).Error; err == nil {
+		// 找到了被拒绝的请求，将其更新为新的待处理请求
+		db.Model(&rejectedRequest).Updates(map[string]any{
+			"status":     0, // 更新为待处理状态
+			"message":    req.Message,
+			"created_at": time.Now().Unix(),
+		})
+
+		c.JSON(200, gin.H{
+			"success":       true,
+			"msg":           "好友请求已重新发送，等待对方同意",
+			"auto_accepted": false,
+		})
+		return
+	}
+
 	// 获取目标用户信息
 	var targetUser models.User
 	if err := db.First(&targetUser, friendID).Error; err != nil {
@@ -375,7 +393,8 @@ func GetFriendRequests(c *gin.Context) {
 // 同意好友请求
 func AgreeFriendRequest(c *gin.Context) {
 	var req struct {
-		RequestID uint `json:"request_id"`
+		RequestID uint   `json:"request_id"`
+		UserID    string `json:"user_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"success": false, "msg": "参数错误"})
@@ -400,7 +419,8 @@ func AgreeFriendRequest(c *gin.Context) {
 // 拒绝好友请求
 func RejectFriendRequest(c *gin.Context) {
 	var req struct {
-		RequestID uint `json:"request_id"`
+		RequestID uint   `json:"request_id"`
+		UserID    string `json:"user_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"success": false, "msg": "参数错误"})
@@ -418,6 +438,164 @@ func RejectFriendRequest(c *gin.Context) {
 	}
 	db.Model(&fr).Update("status", 2) // 2表示拒绝
 	c.JSON(200, gin.H{"success": true, "msg": "已拒绝好友请求"})
+}
+
+// 批量同意好友请求
+func BatchAgreeFriendRequests(c *gin.Context) {
+	var req struct {
+		UserID     string   `json:"user_id"`
+		RequestIDs []string `json:"request_ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"success": false, "msg": "参数错误"})
+		return
+	}
+
+	if len(req.RequestIDs) == 0 {
+		c.JSON(400, gin.H{"success": false, "msg": "请求ID列表不能为空"})
+		return
+	}
+
+	db := c.MustGet("db").(*gorm.DB)
+
+	// 转换请求ID为uint切片
+	var requestIDs []uint
+	for _, idStr := range req.RequestIDs {
+		id, err := strconv.ParseUint(idStr, 10, 32)
+		if err != nil {
+			continue
+		}
+		requestIDs = append(requestIDs, uint(id))
+	}
+
+	if len(requestIDs) == 0 {
+		c.JSON(400, gin.H{"success": false, "msg": "无有效的请求ID"})
+		return
+	}
+
+	// 查询所有待处理的请求
+	var requests []models.FriendRequest
+	if err := db.Where("id IN ? AND status = 0", requestIDs).Find(&requests).Error; err != nil {
+		c.JSON(500, gin.H{"success": false, "msg": "查询请求失败"})
+		return
+	}
+
+	if len(requests) == 0 {
+		c.JSON(400, gin.H{"success": false, "msg": "没有找到待处理的请求"})
+		return
+	}
+
+	// 开始事务
+	tx := db.Begin()
+
+	successCount := 0
+	for _, fr := range requests {
+		// 更新请求状态为已同意
+		if err := tx.Model(&fr).Update("status", 1).Error; err != nil {
+			tx.Rollback()
+			c.JSON(500, gin.H{"success": false, "msg": "处理请求失败"})
+			return
+		}
+
+		// 创建好友关系（双向）
+		if err := tx.Create(&models.Friend{UserID: fr.FromID, FriendID: fr.ToID, CreatedAt: time.Now().Unix()}).Error; err != nil {
+			tx.Rollback()
+			c.JSON(500, gin.H{"success": false, "msg": "创建好友关系失败"})
+			return
+		}
+
+		if err := tx.Create(&models.Friend{UserID: fr.ToID, FriendID: fr.FromID, CreatedAt: time.Now().Unix()}).Error; err != nil {
+			tx.Rollback()
+			c.JSON(500, gin.H{"success": false, "msg": "创建好友关系失败"})
+			return
+		}
+
+		successCount++
+	}
+
+	// 提交事务
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(500, gin.H{"success": false, "msg": "提交事务失败"})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"success": true,
+		"msg":     fmt.Sprintf("已同意 %d 个好友请求", successCount),
+		"count":   successCount,
+	})
+}
+
+// 批量拒绝好友请求
+func BatchRejectFriendRequests(c *gin.Context) {
+	var req struct {
+		UserID     string   `json:"user_id"`
+		RequestIDs []string `json:"request_ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"success": false, "msg": "参数错误"})
+		return
+	}
+
+	if len(req.RequestIDs) == 0 {
+		c.JSON(400, gin.H{"success": false, "msg": "请求ID列表不能为空"})
+		return
+	}
+
+	db := c.MustGet("db").(*gorm.DB)
+
+	// 转换请求ID为uint切片
+	var requestIDs []uint
+	for _, idStr := range req.RequestIDs {
+		id, err := strconv.ParseUint(idStr, 10, 32)
+		if err != nil {
+			continue
+		}
+		requestIDs = append(requestIDs, uint(id))
+	}
+
+	if len(requestIDs) == 0 {
+		c.JSON(400, gin.H{"success": false, "msg": "无有效的请求ID"})
+		return
+	}
+
+	// 查询所有待处理的请求
+	var requests []models.FriendRequest
+	if err := db.Where("id IN ? AND status = 0", requestIDs).Find(&requests).Error; err != nil {
+		c.JSON(500, gin.H{"success": false, "msg": "查询请求失败"})
+		return
+	}
+
+	if len(requests) == 0 {
+		c.JSON(400, gin.H{"success": false, "msg": "没有找到待处理的请求"})
+		return
+	}
+
+	// 开始事务
+	tx := db.Begin()
+
+	successCount := 0
+	for _, fr := range requests {
+		// 更新请求状态为已拒绝
+		if err := tx.Model(&fr).Update("status", 2).Error; err != nil {
+			tx.Rollback()
+			c.JSON(500, gin.H{"success": false, "msg": "处理请求失败"})
+			return
+		}
+		successCount++
+	}
+
+	// 提交事务
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(500, gin.H{"success": false, "msg": "提交事务失败"})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"success": true,
+		"msg":     fmt.Sprintf("已拒绝 %d 个好友请求", successCount),
+		"count":   successCount,
+	})
 }
 
 // 搜索用户
