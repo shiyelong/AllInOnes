@@ -36,13 +36,81 @@ class _PhoneRegisterPageState extends State<PhoneRegisterPage> {
                   ),
                 ),
                 TextButton(
-                  onPressed: () {
-                    setState(() {
-                      controller.sendCode();
-                    });
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('模拟验证码: ${controller.generatedCode}')),
-                    );
+                  onPressed: () async {
+                    // 设置手机号
+                    controller.phone = phoneCtrl.text;
+
+                    // 发送验证码
+                    final response = await controller.sendCode();
+
+                    if (response['success'] == true) {
+                      // 显示验证码对话框，而不是底部Snackbar
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: Text('验证码已发送'),
+                          content: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text('模拟手机验证码:'),
+                              SizedBox(height: 10),
+                              Text(
+                                controller.generatedCode,
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue,
+                                ),
+                              ),
+                            ],
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () {
+                                // 自动填充验证码
+                                codeCtrl.text = controller.generatedCode;
+                                Navigator.pop(context);
+                              },
+                              child: Text('自动填充'),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: Text('关闭'),
+                            ),
+                          ],
+                        ),
+                      );
+                    } else if (response['msg']?.contains('已被注册') == true) {
+                      // 显示已注册提示对话框
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: Row(
+                            children: [
+                              Icon(Icons.error_outline, color: Colors.red),
+                              SizedBox(width: 10),
+                              Text('手机号已注册'),
+                            ],
+                          ),
+                          content: Text('该手机号已被注册，请使用其他手机号或直接登录。'),
+                          actions: [
+                            TextButton(
+                              onPressed: () {
+                                Navigator.pop(context);
+                              },
+                              child: Text('确定'),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                Navigator.pop(context);
+                                Navigator.of(context).pushReplacementNamed('/login');
+                              },
+                              child: Text('去登录'),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
                   },
                   child: Text('获取验证码'),
                 ),
@@ -64,12 +132,57 @@ class _PhoneRegisterPageState extends State<PhoneRegisterPage> {
                 });
                 bool ok = controller.validateAndRegister();
                 if (ok) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('注册成功')),
+                  // 注册成功，显示成功对话框
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: Row(
+                        children: [
+                          Icon(Icons.check_circle, color: Colors.green),
+                          SizedBox(width: 10),
+                          Text('注册成功'),
+                        ],
+                      ),
+                      content: Text('您已成功注册，即将跳转到登录页面...'),
+                      actions: [
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            Navigator.of(context).pushReplacementNamed('/login');
+                          },
+                          child: Text('确定'),
+                        ),
+                      ],
+                    ),
                   );
+
+                  // 3秒后自动关闭对话框并跳转
+                  Future.delayed(Duration(seconds: 3), () {
+                    if (Navigator.of(context).canPop()) {
+                      Navigator.pop(context);
+                      Navigator.of(context).pushReplacementNamed('/login');
+                    }
+                  });
                 } else if (controller.error != null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(controller.error!)),
+                  // 显示错误对话框，而不是底部Snackbar
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: Row(
+                        children: [
+                          Icon(Icons.error_outline, color: Colors.red),
+                          SizedBox(width: 10),
+                          Text('注册失败'),
+                        ],
+                      ),
+                      content: Text(controller.error!),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: Text('确定'),
+                        ),
+                      ],
+                    ),
                   );
                 }
               },

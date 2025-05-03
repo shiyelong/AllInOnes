@@ -1,13 +1,23 @@
 package routes
 
 import (
-	"github.com/gin-gonic/gin"
 	"allinone_backend/controllers"
+
+	"github.com/gin-gonic/gin"
 )
 
-func RegisterFriendsRoutes(r *gin.Engine) {
-	r.POST("/friend/add", controllers.AddFriend)
-	r.GET("/friend/list", controllers.GetFriends)
-	r.POST("/friend/block", controllers.BlockFriend)
-	r.POST("/friend/unblock", controllers.UnblockFriend)
+func RegisterFriendsRoutes(r *gin.RouterGroup) {
+	friends := r.Group("/friends")
+	{
+		friends.POST("/add", controllers.AddFriend)
+		friends.GET("/list", controllers.GetFriends)
+		friends.POST("/block", controllers.BlockFriend)
+		friends.POST("/unblock", controllers.UnblockFriend)
+		friends.GET("/requests", controllers.GetFriendRequests)
+		friends.POST("/agree", controllers.AgreeFriendRequest)
+		friends.POST("/reject", controllers.RejectFriendRequest)
+		friends.GET("/search", controllers.SearchUsers)
+		friends.GET("/mode", controllers.GetFriendAddMode)
+		friends.POST("/mode", controllers.SetFriendAddMode)
+	}
 }

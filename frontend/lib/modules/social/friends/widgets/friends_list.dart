@@ -3,9 +3,18 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../friend_list/friend_block_service.dart';
+import '../../chat/chat_detail_page.dart';
+import '../../../../common/persistence.dart';
+import '../../../../common/theme_manager.dart';
 
 class FriendsList extends StatefulWidget {
-  const FriendsList({super.key});
+  final Function(Map<String, dynamic>)? onFriendSelected;
+
+  const FriendsList({
+    super.key,
+    this.onFriendSelected,
+  });
+
   @override
   State<FriendsList> createState() => _FriendsListState();
 }
@@ -84,7 +93,41 @@ class _FriendsListState extends State<FriendsList> {
                                   SnackBar(content: Text('已屏蔽，无法聊天')),
                                 )
                             : () {
-                                // TODO: 跳转聊天界面
+                                final userInfo = Persistence.getUserInfo();
+                                if (userInfo == null) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('用户信息不存在，请重新登录')),
+                                  );
+                                  return;
+                                }
+
+                                // 创建好友信息对象
+                                final friend = {
+                                  'id': f['friend_id'],
+                                  'nickname': f['nickname'] ?? '好友${f['friend_id']}',
+                                  'avatar': f['avatar'] ?? '',
+                                };
+
+                                // 检查是否是桌面平台
+                                final isDesktop = ThemeManager.instance.isDesktop;
+
+                                if (isDesktop && widget.onFriendSelected != null) {
+                                  // 在桌面平台上，使用回调通知父组件更新聊天面板
+                                  widget.onFriendSelected!(friend);
+                                } else {
+                                  // 在移动平台上，导航到聊天详情页
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => ChatDetailPage(
+                                        userId: userInfo.id.toString(),
+                                        targetId: friend['id'].toString(),
+                                        targetName: friend['nickname'],
+                                        targetAvatar: friend['avatar'],
+                                      ),
+                                    ),
+                                  );
+                                }
                               },
                         trailing: PopupMenuButton<String>(
                           onSelected: (v) {

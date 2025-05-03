@@ -1,10 +1,11 @@
 package login
 
 import (
-	"net/http"
-	"github.com/gin-gonic/gin"
-	"allinone_backend/utils"
 	"allinone_backend/models"
+	"allinone_backend/utils"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -25,7 +26,8 @@ func LoginHandler(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"success": false, "msg": "账号或密码错误"})
 		return
 	}
-	token, err := utils.GenerateToken(req.Account)
+	// 临时使用固定的用户ID
+	token, err := utils.GenerateToken(1, req.Account)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "msg": "生成token失败"})
 		return

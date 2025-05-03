@@ -1,17 +1,18 @@
 package controllers
 
 import (
+	"allinone_backend/models"
+	"encoding/json"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
-	"allinone_backend/models"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"encoding/json"
-	"strings"
-	"strconv"
-	"time"
 )
 
 func setupChatTestRouter() (*gin.Engine, *gorm.DB) {
@@ -24,7 +25,7 @@ func setupChatTestRouter() (*gin.Engine, *gorm.DB) {
 		c.Next()
 	})
 	r.POST("/user/register", RegisterUser)
-	r.POST("/chat/single", SingleChat)
+	r.POST("/chat/single", SendMessage)
 	r.GET("/chat/sync", SyncMessages)
 	return r, db
 }

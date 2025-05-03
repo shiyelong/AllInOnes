@@ -3,6 +3,14 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  audioplayers_linux
+  desktop_window
+  emoji_picker_flutter
+  file_selector_linux
+  flutter_webrtc
+  screen_retriever
+  url_launcher_linux
+  window_manager
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST

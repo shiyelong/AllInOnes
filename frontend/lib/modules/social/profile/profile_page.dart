@@ -1,12 +1,201 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'settings_page.dart';
+import '../../../common/persistence.dart';
+import '../../../common/api.dart';
+import '../../../common/theme.dart';
+import '../../../widgets/app_avatar.dart';
+import '../../../modules/profile/avatar_cropper.dart';
 
-class ProfilePage extends StatelessWidget {
+class ProfilePage extends StatefulWidget {
+  @override
+  _ProfilePageState createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  UserInfo? _userInfo;
+  bool _isLoading = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserInfo();
+  }
+
+  // 加载用户信息
+  Future<void> _loadUserInfo() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // 尝试从API获取最新的用户信息
+      final response = await Api.getUserInfo();
+
+      if (response['success'] == true && response['data'] != null) {
+        // 保存用户信息到本地
+        await Persistence.saveUserInfo(response['data']);
+
+        setState(() {
+          _userInfo = UserInfo.fromJson(response['data']);
+          _isLoading = false;
+        });
+      } else {
+        // 如果API请求失败，尝试从本地获取
+        final userInfo = await Persistence.getUserInfoAsync();
+
+        setState(() {
+          _userInfo = userInfo;
+          _isLoading = false;
+          if (userInfo == null) {
+            _error = '无法获取用户信息';
+          }
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _error = '获取用户信息失败: $e';
+      });
+    }
+  }
+
+  // 更新头像
+  Future<void> _updateAvatar(File imageFile) async {
+    try {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+
+      // 上传头像
+      final response = await Api.uploadFile(imageFile.path, 'avatar');
+
+      if (response['success'] == true) {
+        // 更新用户信息
+        final avatarUrl = response['data']['url'];
+        final updateResponse = await Api.updateUserInfo({
+          'avatar': avatarUrl,
+        });
+
+        if (updateResponse['success'] == true) {
+          // 更新本地缓存
+          await Persistence.saveUserInfo(updateResponse['data']);
+
+          // 清除缓存的用户信息
+          Persistence.clearCachedUserInfo();
+
+          // 重新加载用户信息
+          await _loadUserInfo();
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('头像更新成功'), backgroundColor: Colors.green),
+          );
+        } else {
+          setState(() {
+            _isLoading = false;
+            _error = updateResponse['msg'] ?? '更新用户信息失败';
+          });
+        }
+      } else {
+        setState(() {
+          _isLoading = false;
+          _error = response['msg'] ?? '上传头像失败';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _error = '操作异常: $e';
+      });
+    }
+  }
+
+  // 更新用户信息
+  Future<void> _updateUserInfo(Map<String, dynamic> data) async {
+    try {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+
+      final response = await Api.updateUserInfo(data);
+
+      if (response['success'] == true) {
+        // 更新本地缓存
+        await Persistence.saveUserInfo(response['data']);
+
+        // 清除缓存的用户信息
+        Persistence.clearCachedUserInfo();
+
+        // 重新加载用户信息
+        await _loadUserInfo();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('个人资料更新成功'), backgroundColor: Colors.green),
+        );
+      } else {
+        setState(() {
+          _isLoading = false;
+          _error = response['msg'] ?? '更新用户信息失败';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _error = '操作异常: $e';
+      });
+    }
+  }
+
+  // 显示编辑昵称对话框
+  void _showEditNicknameDialog() {
+    final TextEditingController controller = TextEditingController(text: _userInfo?.nickname);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('编辑昵称'),
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(
+            hintText: '请输入新昵称',
+            border: OutlineInputBorder(),
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('取消'),
+          ),
+          TextButton(
+            onPressed: () {
+              if (controller.text.isNotEmpty) {
+                Navigator.pop(context);
+                _updateUserInfo({'nickname': controller.text});
+              }
+            },
+            child: Text('保存'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
-      body: ListView(
+      appBar: AppBar(
+        title: Text('个人资料'),
+        backgroundColor: AppTheme.primaryColor,
+      ),
+      body: _isLoading
+          ? Center(child: CircularProgressIndicator())
+          : ListView(
         padding: EdgeInsets.all(0),
         children: [
           Container(
@@ -14,45 +203,40 @@ class ProfilePage extends StatelessWidget {
             padding: EdgeInsets.symmetric(vertical: 32),
             child: Column(
               children: [
-                GestureDetector(
-                  onTap: () async {
-                    showModalBottomSheet(
-                      context: context,
-                      builder: (ctx) => SafeArea(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ListTile(
-                              leading: Icon(Icons.camera_alt),
-                              title: Text('拍照更换头像'),
-                              onTap: () {
-                                Navigator.pop(ctx);
-                                // TODO: 实现拍照换头像
-                              },
-                            ),
-                            ListTile(
-                              leading: Icon(Icons.photo_library),
-                              title: Text('从相册选择'),
-                              onTap: () {
-                                Navigator.pop(ctx);
-                                // TODO: 实现相册换头像
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
+                AvatarCropper(
+                  initialAvatarUrl: _userInfo?.avatar,
+                  size: 88,
+                  onAvatarSelected: (File imageFile) {
+                    _updateAvatar(imageFile);
                   },
-                  child: CircleAvatar(
-                    radius: 44,
-                    backgroundColor: Colors.blueAccent,
-                    child: Text('A', style: TextStyle(fontSize: 40, color: Colors.white)),
-                  ),
                 ),
                 SizedBox(height: 16),
-                Text('ALL 用户', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                GestureDetector(
+                  onTap: () {
+                    _showEditNicknameDialog();
+                  },
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _userInfo?.nickname != null && _userInfo!.nickname!.isNotEmpty
+                            ? _userInfo!.nickname!
+                            : _userInfo?.account ?? '用户',
+                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      SizedBox(width: 8),
+                      Icon(Icons.edit, size: 16, color: Colors.grey),
+                    ],
+                  ),
+                ),
                 SizedBox(height: 8),
-                Text('ID: 10001', style: TextStyle(color: Colors.grey)),
+                Text('账号: ${_userInfo?.account ?? '未知'}', style: TextStyle(color: Colors.grey)),
+                if (_userInfo?.generatedEmail != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4.0),
+                    child: Text('邮箱: ${_userInfo?.generatedEmail}', style: TextStyle(color: Colors.grey)),
+                  ),
               ],
             ),
           ),
@@ -95,7 +279,9 @@ class ProfilePage extends StatelessWidget {
                   leading: Icon(Icons.account_balance_wallet, color: Colors.blue),
                   title: Text('我的钱包'),
                   trailing: Icon(Icons.chevron_right),
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.pushNamed(context, '/wallet');
+                  },
                 ),
                 Divider(height: 1),
                 ListTile(

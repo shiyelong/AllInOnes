@@ -1,10 +1,14 @@
 package routes
 
 import (
-	"github.com/gin-gonic/gin"
 	"allinone_backend/controllers"
+
+	"github.com/gin-gonic/gin"
 )
 
-func RegisterGroupRoutes(r *gin.Engine) {
-	r.POST("/group/create", controllers.CreateGroup)
+func RegisterGroupRoutes(r *gin.RouterGroup) {
+	group := r.Group("/group")
+	{
+		group.POST("/create", controllers.CreateGroup)
+	}
 }

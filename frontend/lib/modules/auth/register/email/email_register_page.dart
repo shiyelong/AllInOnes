@@ -62,7 +62,39 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text('邮箱注册', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-                        SizedBox(height: 32),
+                        SizedBox(height: 16),
+                        // 错误消息显示
+                        AnimatedBuilder(
+                          animation: controller,
+                          builder: (context, child) {
+                            if (controller.error != null) {
+                              return Container(
+                                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                margin: EdgeInsets.only(bottom: 16),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.shade50,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.red.shade200),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.error_outline, color: Colors.red),
+                                    SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        controller.error!,
+                                        style: TextStyle(color: Colors.red.shade700),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            } else {
+                              return SizedBox(height: 0);
+                            }
+                          },
+                        ),
+                        SizedBox(height: 16),
                         TextField(
                           controller: emailCtrl,
                           decoration: InputDecoration(labelText: '邮箱'),
@@ -79,11 +111,81 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
                               ),
                             ),
                             TextButton(
-                              onPressed: () {
-                                controller.sendCode();
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('模拟邮箱验证码: ${controller.generatedCode}')),
-                                );
+                              onPressed: () async {
+                                // 设置邮箱
+                                controller.email = emailCtrl.text;
+
+                                // 发送验证码
+                                final response = await controller.sendCode();
+
+                                if (response['success'] == true) {
+                                  // 显示验证码对话框，而不是底部Snackbar
+                                  showDialog(
+                                    context: context,
+                                    builder: (context) => AlertDialog(
+                                      title: Text('验证码已发送'),
+                                      content: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text('模拟邮箱验证码:'),
+                                          SizedBox(height: 10),
+                                          Text(
+                                            controller.generatedCode,
+                                            style: TextStyle(
+                                              fontSize: 24,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.blue,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () {
+                                            // 自动填充验证码
+                                            codeCtrl.text = controller.generatedCode;
+                                            Navigator.pop(context);
+                                          },
+                                          child: Text('自动填充'),
+                                        ),
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context),
+                                          child: Text('关闭'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                } else if (response['msg']?.contains('已被注册') == true) {
+                                  // 显示已注册提示对话框
+                                  showDialog(
+                                    context: context,
+                                    builder: (context) => AlertDialog(
+                                      title: Row(
+                                        children: [
+                                          Icon(Icons.error_outline, color: Colors.red),
+                                          SizedBox(width: 10),
+                                          Text('邮箱已注册'),
+                                        ],
+                                      ),
+                                      content: Text('该邮箱已被注册，请使用其他邮箱或直接登录。'),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () {
+                                            Navigator.pop(context);
+                                          },
+                                          child: Text('确定'),
+                                        ),
+                                        TextButton(
+                                          onPressed: () {
+                                            Navigator.pop(context);
+                                            Navigator.of(context).pushReplacementNamed('/login');
+                                          },
+                                          child: Text('去登录'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }
                               },
                               child: Text('获取验证码'),
                             ),
@@ -104,14 +206,39 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
                             controller.password = pwdCtrl.text;
                             bool ok = controller.validateAndRegister();
                             if (ok) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('注册成功')),
+                              // 注册成功，显示成功对话框
+                              showDialog(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: Row(
+                                    children: [
+                                      Icon(Icons.check_circle, color: Colors.green),
+                                      SizedBox(width: 10),
+                                      Text('注册成功'),
+                                    ],
+                                  ),
+                                  content: Text('您已成功注册，即将跳转到登录页面...'),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () {
+                                        Navigator.pop(context);
+                                        Navigator.of(context).pushReplacementNamed('/login');
+                                      },
+                                      child: Text('确定'),
+                                    ),
+                                  ],
+                                ),
                               );
-                            } else if (controller.error != null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(controller.error!)),
-                              );
+
+                              // 3秒后自动关闭对话框并跳转
+                              Future.delayed(Duration(seconds: 3), () {
+                                if (Navigator.of(context).canPop()) {
+                                  Navigator.pop(context);
+                                  Navigator.of(context).pushReplacementNamed('/login');
+                                }
+                              });
                             }
+                            // 错误信息已经在上方显示，不需要额外的Snackbar
                           },
                           child: Text('注册'),
                         ),

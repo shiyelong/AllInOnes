@@ -4,6 +4,10 @@ import 'qr_scan_placeholder.dart';
 import 'chat_detail.dart';
 import 'add_friend_dialog.dart';
 import 'chat_service.dart';
+import 'chat_detail_page.dart';
+import 'two_panel_chat_page.dart';
+import '../../../common/persistence.dart';
+import '../../../common/text_sanitizer.dart';
 
 class ChatPage extends StatefulWidget {
   @override
@@ -24,13 +28,26 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Future<void> fetchRecentChats() async {
-    // TODO: 替换为实际登录用户ID
-    final userId = 1;
-    final chats = await ChatService.fetchRecentChats(userId);
-    setState(() {
-      recentChats = chats;
-      loading = false;
-    });
+    try {
+      final userId = Persistence.getUserInfo()?.id;
+      if (userId == null) {
+        setState(() {
+          loading = false;
+        });
+        return;
+      }
+
+      final chats = await ChatService.fetchRecentChats(userId);
+      setState(() {
+        recentChats = chats;
+        loading = false;
+      });
+    } catch (e) {
+      print('获取聊天列表失败: $e');
+      setState(() {
+        loading = false;
+      });
+    }
   }
 
   bool get isMobile => MediaQuery.of(context).size.width < 600;
@@ -49,27 +66,75 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  void _selectChat(int idx) async {
+  Future<void> _selectChat(int idx) async {
     setState(() {
       selectedChatIdx = idx;
       messages = <Map<String, dynamic>>[];
     });
-    // TODO: 拉取聊天消息
-    await Future.delayed(Duration(milliseconds: 200));
-    setState(() {
-      messages = <Map<String, dynamic>>[
-        {"from_me": false, "text": "你好，这是一条历史消息"},
-        {"from_me": true, "text": "你好！"},
-      ];
-    });
+
+    try {
+      final chatId = recentChats[idx]['target_id'];
+      final fetchedMessages = await ChatService.fetchMessages(chatId);
+      setState(() {
+        messages = fetchedMessages;
+      });
+    } catch (e) {
+      print('获取消息失败: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('获取消息失败: $e'), backgroundColor: Colors.red),
+      );
+    }
   }
 
-  void _sendText(String text) {
+  Future<void> _sendText(String text) async {
     if (selectedChatIdx == null) return;
+
+    final chatId = recentChats[selectedChatIdx!]['target_id'];
+    final userId = Persistence.getUserInfo()?.id ?? 0;
+
+    // 先添加一条本地消息，提高响应速度
     setState(() {
       messages = List<Map<String, dynamic>>.from(messages)
-        ..add({"from_me": true, "text": text});
+        ..add({
+          "from_id": userId,
+          "to_id": chatId,
+          "content": text,
+          "type": "text",
+          "created_at": DateTime.now().millisecondsSinceEpoch ~/ 1000,
+          "status": 0, // 发送中
+        });
     });
+
+    try {
+      final success = await ChatService.sendMessage(chatId, text);
+
+      if (success) {
+        // 刷新消息列表
+        _selectChat(selectedChatIdx!);
+      } else {
+        // 更新消息状态为发送失败
+        setState(() {
+          final index = messages.indexWhere((msg) =>
+            msg['from_id'] == userId &&
+            msg['content'] == text &&
+            msg['status'] == 0
+          );
+
+          if (index != -1) {
+            messages[index]['status'] = 2; // 发送失败
+          }
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('发送失败'), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      print('发送消息失败: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('发送消息失败: $e'), backgroundColor: Colors.red),
+      );
+    }
   }
 
   @override
@@ -116,70 +181,35 @@ class _ChatPageState extends State<ChatPage> {
                     itemBuilder: (context, idx) {
                       final chat = recentChats[idx];
                       return ListTile(
-                        leading: CircleAvatar(child: Text(chat['peer_name']?[0] ?? '?')),
-                        title: Text(chat['peer_name'] ?? ''),
-                        subtitle: Text(chat['last_message'] ?? ''),
+                        leading: CircleAvatar(
+                          child: Text(
+                            TextSanitizer.sanitize(chat['target_name'] ?? '?').isNotEmpty ?
+                              TextSanitizer.sanitize(chat['target_name'] ?? '?')[0] : '?'
+                          )
+                        ),
+                        title: Text(TextSanitizer.sanitize(chat['target_name'] ?? '')),
+                        subtitle: Text(TextSanitizer.sanitize(chat['last_message'] ?? '')),
                         trailing: chat['unread_count'] != null && chat['unread_count'] > 0 ? CircleAvatar(radius: 10, child: Text('${chat['unread_count']}')) : null,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ChatDetailPage(
+                                userId: Persistence.getUserInfo()?.id.toString() ?? '',
+                                targetId: chat['target_id'].toString(),
+                                targetName: TextSanitizer.sanitize(chat['target_name'] ?? '好友'),
+                                targetAvatar: chat['target_avatar'] ?? '',
+                              ),
+                            ),
+                          );
+                        },
                       );
                     },
                   )),
       );
     } else {
-      // 桌面/平板端：左侧最近聊天，右侧消息区（预留）
-      return Row(
-        children: [
-          Container(
-            width: 260,
-            color: Colors.grey[100],
-            child: Column(
-              children: [
-                Padding(
-                  padding: EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      icon: Icon(Icons.person_add),
-                      label: Text('加好友'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueAccent,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      onPressed: _showAddFriendDialog,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: recentChats.length,
-                    itemBuilder: (ctx, idx) => ListTile(
-                      selected: selectedChatIdx == idx,
-                      leading: CircleAvatar(child: Text(recentChats[idx]['peer_name']?[0] ?? '?')),
-                      title: Text(recentChats[idx]['peer_name'] ?? ''),
-                      subtitle: Text(recentChats[idx]['last_message'] ?? ''),
-                      trailing: recentChats[idx]['unread_count'] != null && recentChats[idx]['unread_count'] > 0
-                          ? CircleAvatar(radius: 10, child: Text('${recentChats[idx]['unread_count']}'), backgroundColor: Colors.redAccent, foregroundColor: Colors.white)
-                          : null,
-                      onTap: () => _selectChat(idx),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          VerticalDivider(width: 1),
-          Expanded(
-            child: selectedChatIdx == null
-                ? Center(child: Text('请选择聊天会话', style: TextStyle(color: Colors.grey)))
-                : ChatDetail(
-                    chat: recentChats[selectedChatIdx!],
-                    messages: messages,
-                    onSendText: _sendText,
-                  ),
-          ),
-        ],
-      );
+      // 桌面/平板端：使用二栏式布局
+      return TwoPanelChatPage();
     }
   }
 }

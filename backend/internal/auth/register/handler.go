@@ -1,15 +1,14 @@
 package register
 
 import (
-	"net/http"
-	"github.com/gin-gonic/gin"
-	"allinone_backend/internal/auth/captcha"
-	"allinone_backend/utils"
 	"allinone_backend/models"
+	"allinone_backend/utils"
+	"net/http"
 	"time"
+
+	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 )
-
 
 type RegisterRequest struct {
 	Account      string `json:"account"`
@@ -24,7 +23,7 @@ func RegisterHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "msg": "参数错误"})
 		return
 	}
-	if !captcha.VerifyCaptcha(req.CaptchaID, req.CaptchaValue) {
+	if !utils.VerifyCaptcha(req.CaptchaID, req.CaptchaValue) {
 		c.JSON(http.StatusOK, gin.H{"success": false, "msg": "验证码错误"})
 		return
 	}
@@ -45,8 +44,8 @@ func RegisterHandler(c *gin.Context) {
 		return
 	}
 	user := models.User{
-		Account: req.Account,
-		Password: string(hashedPwd),
+		Account:   req.Account,
+		Password:  string(hashedPwd),
 		CreatedAt: time.Now().Unix(),
 	}
 	if err := utils.DB.Create(&user).Error; err != nil {

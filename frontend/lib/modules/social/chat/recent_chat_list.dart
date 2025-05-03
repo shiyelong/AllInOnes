@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../../../common/text_sanitizer.dart';
 
 class RecentChatListPage extends StatefulWidget {
   final int userId;
@@ -39,9 +40,14 @@ class _RecentChatListPageState extends State<RecentChatListPage> {
       itemBuilder: (context, idx) {
         final chat = recentChats[idx];
         return ListTile(
-          leading: CircleAvatar(child: Text(chat['peer_name']?[0] ?? '?')),
-          title: Text(chat['peer_name'] ?? ''),
-          subtitle: Text(chat['last_message'] ?? ''),
+          leading: CircleAvatar(
+            child: Text(
+              TextSanitizer.sanitize(chat['peer_name'] ?? '?').isNotEmpty ?
+                TextSanitizer.sanitize(chat['peer_name'] ?? '?')[0] : '?'
+            )
+          ),
+          title: Text(TextSanitizer.sanitize(chat['peer_name'] ?? '')),
+          subtitle: Text(TextSanitizer.sanitize(chat['last_message'] ?? '')),
           trailing: chat['unread_count'] > 0 ? CircleAvatar(radius: 10, child: Text('${chat['unread_count']}')) : null,
           onTap: () {/* 跳转到聊天详情 */},
         );
