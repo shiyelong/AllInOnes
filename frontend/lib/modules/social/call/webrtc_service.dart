@@ -6,7 +6,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:frontend/common/api.dart';
 import 'package:frontend/common/config.dart';
 import 'package:frontend/common/persistence.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:frontend/modules/social/call/firebase_signaling_service.dart';
 
 /// WebRTC服务类，用于处理语音和视频通话
 class WebRTCService {
@@ -22,9 +22,8 @@ class WebRTCService {
   RTCVideoRenderer? _localRenderer;
   RTCVideoRenderer? _remoteRenderer;
 
-  // WebSocket相关
-  WebSocketChannel? _channel;
-  String? _token;
+  // Firebase信令服务
+  final FirebaseSignalingService _firebaseSignaling = FirebaseSignalingService();
 
   // 通话状态
   bool _isInitialized = false;
@@ -56,8 +55,8 @@ class WebRTCService {
     if (_isInitialized) return;
 
     try {
-      // 初始化WebSocket连接
-      await _initWebSocket();
+      // 初始化Firebase信令服务
+      await _initFirebaseSignaling();
 
       // 创建PeerConnection
       await _createPeerConnection();
@@ -71,45 +70,46 @@ class WebRTCService {
     }
   }
 
-  /// 初始化WebSocket连接
-  Future<void> _initWebSocket() async {
+  /// 初始化Firebase信令服务
+  Future<void> _initFirebaseSignaling() async {
     try {
-      // 获取用户信息和Token
+      // 获取用户信息
       final userInfo = await Persistence.getUserInfoAsync();
       if (userInfo == null) {
         throw Exception('获取用户信息失败');
       }
 
-      _token = await Persistence.getTokenAsync();
-      if (_token == null) {
-        throw Exception('获取Token失败');
-      }
+      // 初始化Firebase
+      await _firebaseSignaling.initialize();
 
-      // 连接WebSocket
-      final wsUrl = '${Config.wsBaseUrl}/ws?user_id=${userInfo.id}&token=$_token';
-      debugPrint('[WebRTCService] 连接WebSocket: $wsUrl');
-      _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
+      // 设置用户ID
+      _firebaseSignaling.setUserId(userInfo.id.toString());
 
-      // 监听WebSocket消息
-      _channel!.stream.listen(
-        (message) {
-          _handleWebSocketMessage(message);
-        },
-        onError: (error) {
-          debugPrint('[WebRTCService] WebSocket错误: $error');
-          if (onError != null) onError!('WebSocket连接错误');
-        },
-        onDone: () {
-          debugPrint('[WebRTCService] WebSocket连接关闭');
-          _isConnected = false;
-          if (onCallStateChanged != null) onCallStateChanged!('连接已关闭');
-        },
-      );
+      // 设置回调函数
+      _firebaseSignaling.onSignalReceived = (data) {
+        _handleSignalMessage(data);
+      };
+
+      _firebaseSignaling.onCallInvitation = (data) {
+        _handleCallInvitation(data);
+      };
+
+      _firebaseSignaling.onCallAccepted = (data) {
+        _handleCallAccepted(data);
+      };
+
+      _firebaseSignaling.onCallRejected = (data) {
+        _handleCallRejected(data);
+      };
+
+      _firebaseSignaling.onCallEnded = (data) {
+        _handleCallEnded(data);
+      };
 
       _isConnected = true;
-      debugPrint('[WebRTCService] WebSocket连接成功');
+      debugPrint('[WebRTCService] Firebase信令服务初始化成功');
     } catch (e) {
-      debugPrint('[WebRTCService] 初始化WebSocket失败: $e');
+      debugPrint('[WebRTCService] 初始化Firebase信令服务失败: $e');
       rethrow;
     }
   }
@@ -165,37 +165,7 @@ class WebRTCService {
     }
   }
 
-  /// 处理WebSocket消息
-  void _handleWebSocketMessage(dynamic message) {
-    try {
-      final Map<String, dynamic> data = jsonDecode(message);
-      final String type = data['type'];
-
-      debugPrint('[WebRTCService] 收到WebSocket消息: $type');
-
-      switch (type) {
-        case 'webrtc_signal':
-          _handleSignalMessage(data);
-          break;
-        case 'call_invitation':
-          _handleCallInvitation(data);
-          break;
-        case 'call_accepted':
-          _handleCallAccepted(data);
-          break;
-        case 'call_rejected':
-          _handleCallRejected(data);
-          break;
-        case 'call_ended':
-          _handleCallEnded(data);
-          break;
-        default:
-          debugPrint('[WebRTCService] 未知消息类型: $type');
-      }
-    } catch (e) {
-      debugPrint('[WebRTCService] 处理WebSocket消息失败: $e');
-    }
-  }
+  // 移除了_handleWebSocketMessage方法，改为使用Firebase信令服务的回调函数
 
   /// 处理信令消息
   void _handleSignalMessage(Map<String, dynamic> data) {
@@ -312,65 +282,62 @@ class WebRTCService {
 
   /// 发送Offer
   Future<void> _sendOffer(String sdp) async {
-    if (_channel == null) return;
+    try {
+      final toUserId = _currentCallId!.split('_')[1]; // 假设callId格式为 "call_接收者ID"
 
-    final userInfo = await Persistence.getUserInfoAsync();
-    if (userInfo == null) return;
+      await _firebaseSignaling.sendSignal(
+        toUserId: toUserId,
+        type: 'offer',
+        signal: sdp,
+        callType: _currentCallType!,
+      );
 
-    final Map<String, dynamic> message = {
-      'type': 'webrtc_signal',
-      'from': userInfo.id,
-      'to': int.parse(_currentCallId!.split('_')[1]), // 假设callId格式为 "call_接收者ID"
-      'signal_type': 'offer',
-      'signal': sdp,
-      'call_type': _currentCallType,
-    };
-
-    _channel!.sink.add(jsonEncode(message));
+      debugPrint('[WebRTCService] 发送Offer成功');
+    } catch (e) {
+      debugPrint('[WebRTCService] 发送Offer失败: $e');
+    }
   }
 
   /// 发送Answer
   Future<void> _sendAnswer(String sdp) async {
-    if (_channel == null) return;
+    try {
+      final toUserId = _currentCallId!.split('_')[1]; // 假设callId格式为 "call_接收者ID"
 
-    final userInfo = await Persistence.getUserInfoAsync();
-    if (userInfo == null) return;
+      await _firebaseSignaling.sendSignal(
+        toUserId: toUserId,
+        type: 'answer',
+        signal: sdp,
+        callType: _currentCallType!,
+      );
 
-    final Map<String, dynamic> message = {
-      'type': 'webrtc_signal',
-      'from': userInfo.id,
-      'to': int.parse(_currentCallId!.split('_')[1]), // 假设callId格式为 "call_接收者ID"
-      'signal_type': 'answer',
-      'signal': sdp,
-      'call_type': _currentCallType,
-    };
-
-    _channel!.sink.add(jsonEncode(message));
+      debugPrint('[WebRTCService] 发送Answer成功');
+    } catch (e) {
+      debugPrint('[WebRTCService] 发送Answer失败: $e');
+    }
   }
 
   /// 发送ICE Candidate
   Future<void> _sendIceCandidate(RTCIceCandidate candidate) async {
-    if (_channel == null) return;
+    try {
+      final toUserId = _currentCallId!.split('_')[1]; // 假设callId格式为 "call_接收者ID"
 
-    final userInfo = await Persistence.getUserInfoAsync();
-    if (userInfo == null) return;
+      final Map<String, dynamic> candidateData = {
+        'candidate': candidate.candidate,
+        'sdpMid': candidate.sdpMid,
+        'sdpMLineIndex': candidate.sdpMLineIndex,
+      };
 
-    final Map<String, dynamic> candidateData = {
-      'candidate': candidate.candidate,
-      'sdpMid': candidate.sdpMid,
-      'sdpMLineIndex': candidate.sdpMLineIndex,
-    };
+      await _firebaseSignaling.sendSignal(
+        toUserId: toUserId,
+        type: 'candidate',
+        signal: jsonEncode(candidateData),
+        callType: _currentCallType!,
+      );
 
-    final Map<String, dynamic> message = {
-      'type': 'webrtc_signal',
-      'from': userInfo.id,
-      'to': int.parse(_currentCallId!.split('_')[1]), // 假设callId格式为 "call_接收者ID"
-      'signal_type': 'candidate',
-      'signal': jsonEncode(candidateData),
-      'call_type': _currentCallType,
-    };
-
-    _channel!.sink.add(jsonEncode(message));
+      debugPrint('[WebRTCService] 发送ICE Candidate成功');
+    } catch (e) {
+      debugPrint('[WebRTCService] 发送ICE Candidate失败: $e');
+    }
   }
 
   /// 设置视频渲染器
@@ -402,7 +369,6 @@ class WebRTCService {
 
       // 设置通话类型
       _currentCallType = 'voice';
-      _currentCallId = 'call_$targetId';
 
       // 获取音频流
       _localStream = await navigator.mediaDevices.getUserMedia({
@@ -425,23 +391,17 @@ class WebRTCService {
       final RTCSessionDescription offer = await _peerConnection!.createOffer();
       await _peerConnection!.setLocalDescription(offer);
 
+      // 发起通话请求
+      _currentCallId = await _firebaseSignaling.startCall(
+        toUserId: targetId,
+        callType: 'voice',
+      );
+
       // 发送Offer
       await _sendOffer(offer.sdp!);
 
-      // 发起通话请求
-      final response = await Api.startVoiceCall(
-        fromId: userInfo.id.toString(),
-        toId: targetId,
-      );
-
-      if (response['success'] == true) {
-        if (onCallStateChanged != null) onCallStateChanged!('正在呼叫...');
-        return _currentCallId;
-      } else {
-        _cleanupCall();
-        if (onError != null) onError!(response['msg'] ?? '呼叫失败');
-        return null;
-      }
+      if (onCallStateChanged != null) onCallStateChanged!('正在呼叫...');
+      return _currentCallId;
     } catch (e) {
       debugPrint('[WebRTCService] 开始语音通话失败: $e');
       _cleanupCall();
@@ -465,7 +425,6 @@ class WebRTCService {
 
       // 设置通话类型
       _currentCallType = 'video';
-      _currentCallId = 'call_$targetId';
 
       // 获取音视频流
       _localStream = await navigator.mediaDevices.getUserMedia({
@@ -492,23 +451,17 @@ class WebRTCService {
       final RTCSessionDescription offer = await _peerConnection!.createOffer();
       await _peerConnection!.setLocalDescription(offer);
 
+      // 发起通话请求
+      _currentCallId = await _firebaseSignaling.startCall(
+        toUserId: targetId,
+        callType: 'video',
+      );
+
       // 发送Offer
       await _sendOffer(offer.sdp!);
 
-      // 发起通话请求
-      final response = await Api.startVideoCall(
-        fromId: userInfo.id.toString(),
-        toId: targetId,
-      );
-
-      if (response['success'] == true) {
-        if (onCallStateChanged != null) onCallStateChanged!('正在呼叫...');
-        return _currentCallId;
-      } else {
-        _cleanupCall();
-        if (onError != null) onError!(response['msg'] ?? '呼叫失败');
-        return null;
-      }
+      if (onCallStateChanged != null) onCallStateChanged!('正在呼叫...');
+      return _currentCallId;
     } catch (e) {
       debugPrint('[WebRTCService] 开始视频通话失败: $e');
       _cleanupCall();
@@ -534,6 +487,9 @@ class WebRTCService {
       _currentCallType = callType;
       _currentCallId = callId;
 
+      // 解析来电者ID
+      final fromUserId = callId.split('_')[1]; // 假设callId格式为 "call_发起者ID"
+
       // 获取媒体流
       final Map<String, dynamic> mediaConstraints = {
         'audio': true,
@@ -558,18 +514,13 @@ class WebRTCService {
       });
 
       // 接听通话请求
-      final response = callType == 'video'
-          ? await Api.acceptVideoCallById(callId: callId)
-          : await Api.acceptVoiceCallById(callId: callId);
+      await _firebaseSignaling.acceptCall(
+        callId: callId,
+        fromUserId: fromUserId,
+      );
 
-      if (response['success'] == true) {
-        if (onCallStateChanged != null) onCallStateChanged!('已接听');
-        return true;
-      } else {
-        _cleanupCall();
-        if (onError != null) onError!(response['msg'] ?? '接听失败');
-        return false;
-      }
+      if (onCallStateChanged != null) onCallStateChanged!('已接听');
+      return true;
     } catch (e) {
       debugPrint('[WebRTCService] 接听通话失败: $e');
       _cleanupCall();
@@ -581,19 +532,17 @@ class WebRTCService {
   /// 拒绝通话
   Future<bool> rejectCall(String callId, String callType) async {
     try {
+      // 解析来电者ID
+      final fromUserId = callId.split('_')[1]; // 假设callId格式为 "call_发起者ID"
+
       // 拒绝通话请求
-      final response = callType == 'video'
-          ? await Api.rejectVideoCallById(callId: callId)
-          : await Api.rejectVoiceCallById(callId: callId);
+      await _firebaseSignaling.rejectCall(
+        callId: callId,
+        fromUserId: fromUserId,
+      );
 
       _cleanupCall();
-
-      if (response['success'] == true) {
-        return true;
-      } else {
-        if (onError != null) onError!(response['msg'] ?? '拒绝失败');
-        return false;
-      }
+      return true;
     } catch (e) {
       debugPrint('[WebRTCService] 拒绝通话失败: $e');
       if (onError != null) onError!('拒绝通话失败: $e');
@@ -608,19 +557,17 @@ class WebRTCService {
         return false;
       }
 
+      // 解析对方ID
+      final toUserId = _currentCallId!.split('_')[1]; // 假设callId格式为 "call_对方ID"
+
       // 结束通话请求
-      final response = _currentCallType == 'video'
-          ? await Api.endVideoCallById(callId: _currentCallId!)
-          : await Api.endVoiceCallById(callId: _currentCallId!);
+      await _firebaseSignaling.endCall(
+        callId: _currentCallId!,
+        toUserId: toUserId,
+      );
 
       _cleanupCall();
-
-      if (response['success'] == true) {
-        return true;
-      } else {
-        if (onError != null) onError!(response['msg'] ?? '结束通话失败');
-        return false;
-      }
+      return true;
     } catch (e) {
       debugPrint('[WebRTCService] 结束通话失败: $e');
       _cleanupCall();
@@ -717,9 +664,8 @@ class WebRTCService {
   void dispose() {
     _cleanupCall();
 
-    // 关闭WebSocket
-    _channel?.sink.close();
-    _channel = null;
+    // 释放Firebase资源
+    _firebaseSignaling.dispose();
 
     _isInitialized = false;
     _isConnected = false;
