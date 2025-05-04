@@ -25,4 +25,17 @@ class Config {
 
   // 邮箱后缀
   static const String emailSuffix = 'mail.allinone.com';
+
+  // WebRTC配置
+  static const Map<String, dynamic> webrtcConfig = {
+    'iceServers': [
+      {'urls': 'stun:stun.l.google.com:19302'},
+      {'urls': 'stun:stun1.l.google.com:19302'},
+      {'urls': 'stun:stun2.l.google.com:19302'},
+    ],
+    'sdpSemantics': 'unified-plan',
+  };
+
+  // WebRTC信令服务器URL
+  static const String webrtcSignalUrl = '$wsBaseUrl/webrtc/signal';
 }

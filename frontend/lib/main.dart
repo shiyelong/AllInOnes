@@ -13,6 +13,7 @@ import 'common/localization.dart';
 import 'common/persistence.dart';
 import 'common/platform_utils.dart';
 import 'modules/profile/settings/theme_settings_page.dart';
+import 'modules/social/call/call_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,6 +46,9 @@ void main() async {
   debugPrint('是否是桌面平台: ${PlatformUtils.isDesktop}');
   debugPrint('是否是Web平台: ${PlatformUtils.isWeb}');
 
+  // 初始化通话管理器
+  await CallManager().initialize();
+
   runApp(const MyApp());
 }
 
@@ -63,6 +67,7 @@ class _MyAppState extends State<MyApp> {
       debugShowCheckedModeBanner: false,
       theme: ThemeManager.getThemeData(),
       themeMode: ThemeMode.light, // 使用自定义主题
+      navigatorKey: navigatorKey, // 使用全局导航键，用于通话管理器
       initialRoute: '/login',
       routes: {
         '/login': (context) => AutoLoginGate(child: LoginPage()),

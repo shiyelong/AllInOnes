@@ -465,8 +465,12 @@ class Api {
   }
 
   // 获取用户信息
-  static Future<Map<String, dynamic>> getUserInfo() async {
-    return await _get('/user/info');
+  static Future<Map<String, dynamic>> getUserInfo({String? userId}) async {
+    if (userId != null) {
+      return await _get('/user/$userId');
+    } else {
+      return await _get('/user/info');
+    }
   }
 
   // 根据ID获取用户信息
@@ -1345,6 +1349,170 @@ class Api {
     } catch (e) {
       debugPrint('[API] 发送WebRTC信令异常: $e');
       return {'success': false, 'msg': '发送信令失败: $e'};
+    }
+  }
+
+  // 开始WebRTC语音通话
+  static Future<Map<String, dynamic>> startVoiceCallWebRTC({
+    required String fromId,
+    required String toId,
+  }) async {
+    debugPrint('[API] 开始WebRTC语音通话: 发起者=$fromId, 接收者=$toId');
+
+    try {
+      final response = await _post('/webrtc/voice/start', data: {
+        'caller_id': int.parse(fromId),
+        'receiver_id': int.parse(toId),
+      });
+
+      return response;
+    } catch (e) {
+      debugPrint('[API] 开始WebRTC语音通话异常: $e');
+      return {'success': false, 'msg': '开始语音通话失败: $e'};
+    }
+  }
+
+  // 结束WebRTC语音通话
+  static Future<Map<String, dynamic>> endVoiceCallWebRTC({
+    required String callId,
+  }) async {
+    debugPrint('[API] 结束WebRTC语音通话: 通话ID=$callId');
+
+    try {
+      final response = await _post('/webrtc/voice/end', data: {
+        'call_id': int.parse(callId),
+      });
+
+      return response;
+    } catch (e) {
+      debugPrint('[API] 结束WebRTC语音通话异常: $e');
+      return {'success': false, 'msg': '结束语音通话失败: $e'};
+    }
+  }
+
+  // 接受WebRTC语音通话
+  static Future<Map<String, dynamic>> acceptVoiceCallWebRTC({
+    required String callId,
+  }) async {
+    debugPrint('[API] 接受WebRTC语音通话: 通话ID=$callId');
+
+    try {
+      final response = await _post('/webrtc/voice/accept', data: {
+        'call_id': int.parse(callId),
+      });
+
+      return response;
+    } catch (e) {
+      debugPrint('[API] 接受WebRTC语音通话异常: $e');
+      return {'success': false, 'msg': '接受语音通话失败: $e'};
+    }
+  }
+
+  // 拒绝WebRTC语音通话
+  static Future<Map<String, dynamic>> rejectVoiceCallWebRTC({
+    required String callId,
+  }) async {
+    debugPrint('[API] 拒绝WebRTC语音通话: 通话ID=$callId');
+
+    try {
+      final response = await _post('/webrtc/voice/reject', data: {
+        'call_id': int.parse(callId),
+      });
+
+      return response;
+    } catch (e) {
+      debugPrint('[API] 拒绝WebRTC语音通话异常: $e');
+      return {'success': false, 'msg': '拒绝语音通话失败: $e'};
+    }
+  }
+
+  // 开始WebRTC视频通话
+  static Future<Map<String, dynamic>> startVideoCallWebRTC({
+    required String fromId,
+    required String toId,
+  }) async {
+    debugPrint('[API] 开始WebRTC视频通话: 发起者=$fromId, 接收者=$toId');
+
+    try {
+      final response = await _post('/webrtc/video/start', data: {
+        'caller_id': int.parse(fromId),
+        'receiver_id': int.parse(toId),
+      });
+
+      return response;
+    } catch (e) {
+      debugPrint('[API] 开始WebRTC视频通话异常: $e');
+      return {'success': false, 'msg': '开始视频通话失败: $e'};
+    }
+  }
+
+  // 结束WebRTC视频通话
+  static Future<Map<String, dynamic>> endVideoCallWebRTC({
+    required String callId,
+  }) async {
+    debugPrint('[API] 结束WebRTC视频通话: 通话ID=$callId');
+
+    try {
+      final response = await _post('/webrtc/video/end', data: {
+        'call_id': int.parse(callId),
+      });
+
+      return response;
+    } catch (e) {
+      debugPrint('[API] 结束WebRTC视频通话异常: $e');
+      return {'success': false, 'msg': '结束视频通话失败: $e'};
+    }
+  }
+
+  // 接受WebRTC视频通话
+  static Future<Map<String, dynamic>> acceptVideoCallWebRTC({
+    required String callId,
+  }) async {
+    debugPrint('[API] 接受WebRTC视频通话: 通话ID=$callId');
+
+    try {
+      final response = await _post('/webrtc/video/accept', data: {
+        'call_id': int.parse(callId),
+      });
+
+      return response;
+    } catch (e) {
+      debugPrint('[API] 接受WebRTC视频通话异常: $e');
+      return {'success': false, 'msg': '接受视频通话失败: $e'};
+    }
+  }
+
+  // 拒绝WebRTC视频通话
+  static Future<Map<String, dynamic>> rejectVideoCallWebRTC({
+    required String callId,
+  }) async {
+    debugPrint('[API] 拒绝WebRTC视频通话: 通话ID=$callId');
+
+    try {
+      final response = await _post('/webrtc/video/reject', data: {
+        'call_id': int.parse(callId),
+      });
+
+      return response;
+    } catch (e) {
+      debugPrint('[API] 拒绝WebRTC视频通话异常: $e');
+      return {'success': false, 'msg': '拒绝视频通话失败: $e'};
+    }
+  }
+
+  // 获取WebRTC通话历史
+  static Future<Map<String, dynamic>> getCallHistoryWebRTC({String type = 'all'}) async {
+    debugPrint('[API] 获取WebRTC通话历史: 类型=$type');
+
+    try {
+      final response = await _get('/webrtc/history', queryParams: {
+        'type': type,
+      });
+
+      return response;
+    } catch (e) {
+      debugPrint('[API] 获取WebRTC通话历史异常: $e');
+      return {'success': false, 'msg': '获取通话历史失败: $e'};
     }
   }
 

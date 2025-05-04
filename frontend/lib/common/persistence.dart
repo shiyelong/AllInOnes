@@ -244,31 +244,31 @@ class Persistence {
     clearCachedUserInfo();
   }
 
-  // 保存聊天消息
+  // ??????
   static Future<void> saveChatMessages(String userId, String targetId, List<Map<String, dynamic>> messages) async {
     final key = 'chat_messages_${userId}_${targetId}';
     final prefs = await SharedPreferences.getInstance();
 
-    // 使用 TextSanitizer 清理消息内容
+    // ?? TextSanitizer ??????
     final sanitizedMessages = messages.map((msg) {
       final sanitizedMsg = Map<String, dynamic>.from(msg);
 
-      // 清理消息内容
+      // ??????
       if (sanitizedMsg.containsKey('content')) {
         final content = sanitizedMsg['content'];
         if (content is String) {
           try {
-            // 简单的清理方法，移除可能导致问题的字符
+            // ???????????????????
             sanitizedMsg['content'] = content
-                .replaceAll(RegExp(r'[\u0000-\u0008\u000B\u000C\u000E-\u001F]'), '') // 控制字符
-                .replaceAll(RegExp(r'[\uD800-\uDFFF]'), ''); // 代理对字符
+                .replaceAll(RegExp(r'[\u0000-\u0008\u000B\u000C\u000E-\u001F]'), '') // ????
+                .replaceAll(RegExp(r'[\uD800-\uDFFF]'), ''); // ?????
           } catch (e) {
-            sanitizedMsg['content'] = '无法显示的内容';
+            sanitizedMsg['content'] = '???????';
           }
         }
       }
 
-      // 清理昵称
+      // ????
       if (sanitizedMsg.containsKey('from_nickname')) {
         final nickname = sanitizedMsg['from_nickname'];
         if (nickname is String) {
@@ -277,7 +277,7 @@ class Persistence {
                 .replaceAll(RegExp(r'[\u0000-\u0008\u000B\u000C\u000E-\u001F]'), '')
                 .replaceAll(RegExp(r'[\uD800-\uDFFF]'), '');
           } catch (e) {
-            sanitizedMsg['from_nickname'] = '用户';
+            sanitizedMsg['from_nickname'] = '??';
           }
         }
       }
@@ -288,7 +288,7 @@ class Persistence {
     await prefs.setString(key, jsonEncode(sanitizedMessages));
   }
 
-  // 获取聊天消息
+  // ??????
   static Future<List<Map<String, dynamic>>> getChatMessages(String userId, String targetId) async {
     final key = 'chat_messages_${userId}_${targetId}';
     final prefs = await SharedPreferences.getInstance();
@@ -300,11 +300,11 @@ class Persistence {
       final List<dynamic> decoded = jsonDecode(messagesJson);
       final messages = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
 
-      // 再次清理消息内容，确保安全
+      // ?????????????
       return messages.map((msg) {
         final sanitizedMsg = Map<String, dynamic>.from(msg);
 
-        // 清理消息内容
+        // ??????
         if (sanitizedMsg.containsKey('content')) {
           final content = sanitizedMsg['content'];
           if (content is String) {
@@ -313,12 +313,12 @@ class Persistence {
                   .replaceAll(RegExp(r'[\u0000-\u0008\u000B\u000C\u000E-\u001F]'), '')
                   .replaceAll(RegExp(r'[\uD800-\uDFFF]'), '');
             } catch (e) {
-              sanitizedMsg['content'] = '无法显示的内容';
+              sanitizedMsg['content'] = '???????';
             }
           }
         }
 
-        // 清理昵称
+        // ????
         if (sanitizedMsg.containsKey('from_nickname')) {
           final nickname = sanitizedMsg['from_nickname'];
           if (nickname is String) {
@@ -327,7 +327,7 @@ class Persistence {
                   .replaceAll(RegExp(r'[\u0000-\u0008\u000B\u000C\u000E-\u001F]'), '')
                   .replaceAll(RegExp(r'[\uD800-\uDFFF]'), '');
             } catch (e) {
-              sanitizedMsg['from_nickname'] = '用户';
+              sanitizedMsg['from_nickname'] = '??';
             }
           }
         }
@@ -335,12 +335,12 @@ class Persistence {
         return sanitizedMsg;
       }).toList();
     } catch (e) {
-      debugPrint('解析聊天消息失败: $e');
+      debugPrint('????????: $e');
       return [];
     }
   }
 
-  // 清理所有聊天消息
+  // ????????
   static Future<void> cleanupChatMessages() async {
     final prefs = await SharedPreferences.getInstance();
     final keys = prefs.getKeys();
@@ -352,11 +352,11 @@ class Persistence {
             final List<dynamic> decoded = jsonDecode(messagesJson);
             final messages = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
 
-            // 清理消息内容
+            // ??????
             final sanitizedMessages = messages.map((msg) {
               final sanitizedMsg = Map<String, dynamic>.from(msg);
 
-              // 清理消息内容
+              // ??????
               if (sanitizedMsg.containsKey('content')) {
                 final content = sanitizedMsg['content'];
                 if (content is String) {
@@ -365,12 +365,12 @@ class Persistence {
                         .replaceAll(RegExp(r'[\u0000-\u0008\u000B\u000C\u000E-\u001F]'), '')
                         .replaceAll(RegExp(r'[\uD800-\uDFFF]'), '');
                   } catch (e) {
-                    sanitizedMsg['content'] = '无法显示的内容';
+                    sanitizedMsg['content'] = '???????';
                   }
                 }
               }
 
-              // 清理昵称
+              // ????
               if (sanitizedMsg.containsKey('from_nickname')) {
                 final nickname = sanitizedMsg['from_nickname'];
                 if (nickname is String) {
@@ -379,7 +379,7 @@ class Persistence {
                         .replaceAll(RegExp(r'[\u0000-\u0008\u000B\u000C\u000E-\u001F]'), '')
                         .replaceAll(RegExp(r'[\uD800-\uDFFF]'), '');
                   } catch (e) {
-                    sanitizedMsg['from_nickname'] = '用户';
+                    sanitizedMsg['from_nickname'] = '??';
                   }
                 }
               }
@@ -390,8 +390,8 @@ class Persistence {
             await prefs.setString(key, jsonEncode(sanitizedMessages));
           }
         } catch (e) {
-          debugPrint('清理聊天消息失败: $key, $e');
-          // 如果解析失败，直接删除该条目
+          debugPrint('????????: $key, $e');
+          // ??????????????
           await prefs.remove(key);
         }
       }

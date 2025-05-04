@@ -16,6 +16,9 @@ import 'red_packet_dialog.dart';
 import 'chat_message_item.dart';
 import '../call/voice_call_page.dart';
 import '../call/video_call_page.dart';
+import '../call/enhanced_voice_call_page.dart';
+import '../call/enhanced_video_call_page.dart';
+import '../call/call_manager.dart';
 import '../../../modules/chat/widgets/voice_recorder_widget.dart';
 import '../../../modules/chat/widgets/voice_message_widget.dart';
 import 'location_picker.dart';
@@ -340,17 +343,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             icon: Icon(Icons.phone, color: Colors.white),
             onPressed: () {
               // 发起语音通话
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => VoiceCallPage(
-                    userId: widget.userId,
-                    targetId: widget.targetId,
-                    targetName: widget.targetName,
-                    targetAvatar: widget.targetAvatar,
-                    isIncoming: false,
-                  ),
-                ),
+              CallManager().startVoiceCall(
+                context: context,
+                targetId: widget.targetId,
+                targetName: widget.targetName,
+                targetAvatar: widget.targetAvatar,
               );
             },
           ),
@@ -381,17 +378,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                         onTap: () {
                           Navigator.pop(context);
                           // 发起语音通话
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => VoiceCallPage(
-                                userId: widget.userId,
-                                targetId: widget.targetId,
-                                targetName: widget.targetName,
-                                targetAvatar: widget.targetAvatar,
-                                isIncoming: false,
-                              ),
-                            ),
+                          CallManager().startVoiceCall(
+                            context: context,
+                            targetId: widget.targetId,
+                            targetName: widget.targetName,
+                            targetAvatar: widget.targetAvatar,
                           );
                         },
                       ),
@@ -401,17 +392,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                         onTap: () {
                           Navigator.pop(context);
                           // 发起视频通话
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => VideoCallPage(
-                                userId: widget.userId,
-                                targetId: widget.targetId,
-                                targetName: widget.targetName,
-                                targetAvatar: widget.targetAvatar,
-                                isIncoming: false,
-                              ),
-                            ),
+                          CallManager().startVideoCall(
+                            context: context,
+                            targetId: widget.targetId,
+                            targetName: widget.targetName,
+                            targetAvatar: widget.targetAvatar,
                           );
                         },
                       ),
