@@ -87,6 +87,8 @@ class _EnhancedVoiceCallPageState extends State<EnhancedVoiceCallPage> with Sing
   // 初始化通话
   Future<void> _initializeCall() async {
     try {
+      debugPrint('[EnhancedVoiceCallPage] 初始化通话');
+
       // 初始化渲染器
       await _localRenderer.initialize();
       await _remoteRenderer.initialize();
@@ -100,8 +102,12 @@ class _EnhancedVoiceCallPageState extends State<EnhancedVoiceCallPage> with Sing
 
       _userId = userInfo.id.toString();
 
+      debugPrint('[EnhancedVoiceCallPage] 用户ID: $_userId, 目标ID: ${widget.targetId}');
+      debugPrint('[EnhancedVoiceCallPage] 是否为来电: ${widget.isIncoming}, 通话ID: ${widget.callId}');
+
       // 设置回调函数
       _webRTCService.onCallStateChanged = (status) {
+        debugPrint('[EnhancedVoiceCallPage] 通话状态变更: $status');
         if (mounted) {
           setState(() {
             _callStatus = status;
@@ -110,6 +116,7 @@ class _EnhancedVoiceCallPageState extends State<EnhancedVoiceCallPage> with Sing
       };
 
       _webRTCService.onCallConnected = () {
+        debugPrint('[EnhancedVoiceCallPage] 通话已连接');
         if (mounted) {
           setState(() {
             _isConnected = true;
@@ -120,6 +127,7 @@ class _EnhancedVoiceCallPageState extends State<EnhancedVoiceCallPage> with Sing
       };
 
       _webRTCService.onCallEnded = () {
+        debugPrint('[EnhancedVoiceCallPage] 通话已结束');
         if (mounted) {
           setState(() {
             _isCallEnded = true;
@@ -129,6 +137,7 @@ class _EnhancedVoiceCallPageState extends State<EnhancedVoiceCallPage> with Sing
       };
 
       _webRTCService.onError = (error) {
+        debugPrint('[EnhancedVoiceCallPage] 通话错误: $error');
         _showError(error);
       };
 
@@ -138,7 +147,26 @@ class _EnhancedVoiceCallPageState extends State<EnhancedVoiceCallPage> with Sing
       if (widget.isIncoming) {
         // 接听来电
         if (widget.callId != null) {
-          await _webRTCService.answerCall(widget.callId!, 'voice');
+          debugPrint('[EnhancedVoiceCallPage] 接听来电: ${widget.callId}');
+          final result = await _webRTCService.answerCall(widget.callId!, 'voice');
+
+          if (!result) {
+            debugPrint('[EnhancedVoiceCallPage] 接听来电失败');
+            _showError('接听来电失败');
+            Future.delayed(Duration(seconds: 2), () {
+              if (mounted) {
+                Navigator.of(context).pop();
+              }
+            });
+          }
+        } else {
+          debugPrint('[EnhancedVoiceCallPage] 来电ID为空');
+          _showError('来电ID为空');
+          Future.delayed(Duration(seconds: 2), () {
+            if (mounted) {
+              Navigator.of(context).pop();
+            }
+          });
         }
       } else {
         // 发起呼叫
@@ -146,18 +174,22 @@ class _EnhancedVoiceCallPageState extends State<EnhancedVoiceCallPage> with Sing
           _callStatus = '正在呼叫...';
         });
 
+        debugPrint('[EnhancedVoiceCallPage] 发起呼叫: ${widget.targetId}');
         final callId = await _webRTCService.startVoiceCall(widget.targetId);
 
         if (callId == null) {
           // 呼叫失败
+          debugPrint('[EnhancedVoiceCallPage] 呼叫失败');
           setState(() {
             _callStatus = '呼叫失败';
           });
           _showCallFailedDialog();
+        } else {
+          debugPrint('[EnhancedVoiceCallPage] 呼叫成功，通话ID: $callId');
         }
       }
     } catch (e) {
-      debugPrint('初始化通话失败: $e');
+      debugPrint('[EnhancedVoiceCallPage] 初始化通话失败: $e');
       setState(() {
         _callStatus = '连接失败: $e';
       });

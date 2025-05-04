@@ -70,6 +70,8 @@ class _EnhancedVideoCallPageState extends State<EnhancedVideoCallPage> {
   // 初始化通话
   Future<void> _initializeCall() async {
     try {
+      debugPrint('[EnhancedVideoCallPage] 初始化通话');
+
       // 初始化渲染器
       await _localRenderer.initialize();
       await _remoteRenderer.initialize();
@@ -83,8 +85,12 @@ class _EnhancedVideoCallPageState extends State<EnhancedVideoCallPage> {
 
       _userId = userInfo.id.toString();
 
+      debugPrint('[EnhancedVideoCallPage] 用户ID: $_userId, 目标ID: ${widget.targetId}');
+      debugPrint('[EnhancedVideoCallPage] 是否为来电: ${widget.isIncoming}, 通话ID: ${widget.callId}');
+
       // 设置回调函数
       _webRTCService.onCallStateChanged = (status) {
+        debugPrint('[EnhancedVideoCallPage] 通话状态变更: $status');
         if (mounted) {
           setState(() {
             _callStatus = status;
@@ -93,6 +99,7 @@ class _EnhancedVideoCallPageState extends State<EnhancedVideoCallPage> {
       };
 
       _webRTCService.onCallConnected = () {
+        debugPrint('[EnhancedVideoCallPage] 通话已连接');
         if (mounted) {
           setState(() {
             _isConnected = true;
@@ -104,6 +111,7 @@ class _EnhancedVideoCallPageState extends State<EnhancedVideoCallPage> {
       };
 
       _webRTCService.onCallEnded = () {
+        debugPrint('[EnhancedVideoCallPage] 通话已结束');
         if (mounted) {
           setState(() {
             _isCallEnded = true;
@@ -113,10 +121,12 @@ class _EnhancedVideoCallPageState extends State<EnhancedVideoCallPage> {
       };
 
       _webRTCService.onError = (error) {
+        debugPrint('[EnhancedVideoCallPage] 通话错误: $error');
         _showError(error);
       };
 
       _webRTCService.onLocalStream = (stream) {
+        debugPrint('[EnhancedVideoCallPage] 收到本地媒体流');
         if (mounted) {
           setState(() {
             _localRenderer.srcObject = stream;
@@ -125,6 +135,7 @@ class _EnhancedVideoCallPageState extends State<EnhancedVideoCallPage> {
       };
 
       _webRTCService.onRemoteStream = (stream) {
+        debugPrint('[EnhancedVideoCallPage] 收到远程媒体流');
         if (mounted) {
           setState(() {
             _remoteRenderer.srcObject = stream;
@@ -141,7 +152,26 @@ class _EnhancedVideoCallPageState extends State<EnhancedVideoCallPage> {
       if (widget.isIncoming) {
         // 接听来电
         if (widget.callId != null) {
-          await _webRTCService.answerCall(widget.callId!, 'video');
+          debugPrint('[EnhancedVideoCallPage] 接听来电: ${widget.callId}');
+          final result = await _webRTCService.answerCall(widget.callId!, 'video');
+
+          if (!result) {
+            debugPrint('[EnhancedVideoCallPage] 接听来电失败');
+            _showError('接听来电失败');
+            Future.delayed(Duration(seconds: 2), () {
+              if (mounted) {
+                Navigator.of(context).pop();
+              }
+            });
+          }
+        } else {
+          debugPrint('[EnhancedVideoCallPage] 来电ID为空');
+          _showError('来电ID为空');
+          Future.delayed(Duration(seconds: 2), () {
+            if (mounted) {
+              Navigator.of(context).pop();
+            }
+          });
         }
       } else {
         // 发起呼叫
@@ -149,18 +179,22 @@ class _EnhancedVideoCallPageState extends State<EnhancedVideoCallPage> {
           _callStatus = '正在呼叫...';
         });
 
+        debugPrint('[EnhancedVideoCallPage] 发起呼叫: ${widget.targetId}');
         final callId = await _webRTCService.startVideoCall(widget.targetId);
 
         if (callId == null) {
           // 呼叫失败
+          debugPrint('[EnhancedVideoCallPage] 呼叫失败');
           setState(() {
             _callStatus = '呼叫失败';
           });
           _showCallFailedDialog();
+        } else {
+          debugPrint('[EnhancedVideoCallPage] 呼叫成功，通话ID: $callId');
         }
       }
     } catch (e) {
-      debugPrint('初始化通话失败: $e');
+      debugPrint('[EnhancedVideoCallPage] 初始化通话失败: $e');
       setState(() {
         _callStatus = '连接失败: $e';
       });

@@ -272,6 +272,8 @@ class WebRTCService {
     final String callType = data['call_type'];
     final int callId = data['call_id'];
 
+    debugPrint('[WebRTCService] 收到通话邀请: fromUserId=$fromUserId, callType=$callType, callId=$callId');
+
     _currentCallId = callId.toString();
     _currentCallType = callType;
 
@@ -281,6 +283,8 @@ class WebRTCService {
         'call_type': callType,
         'call_id': callId,
       });
+    } else {
+      debugPrint('[WebRTCService] 警告: 没有设置onIncomingCall回调，无法处理来电');
     }
   }
 

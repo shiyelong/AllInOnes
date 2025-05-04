@@ -14,6 +14,7 @@ import 'common/persistence.dart';
 import 'common/platform_utils.dart';
 import 'modules/profile/settings/theme_settings_page.dart';
 import 'modules/social/call/call_manager.dart';
+import 'modules/social/call/mock_signaling_server.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,6 +46,9 @@ void main() async {
   debugPrint('是否是移动平台: ${PlatformUtils.isMobile}');
   debugPrint('是否是桌面平台: ${PlatformUtils.isDesktop}');
   debugPrint('是否是Web平台: ${PlatformUtils.isWeb}');
+
+  // 启动模拟信令服务器
+  await MockSignalingServer().start(port: 3002);
 
   // 初始化通话管理器
   await CallManager().initialize();
