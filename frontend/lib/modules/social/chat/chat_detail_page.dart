@@ -352,6 +352,18 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             },
           ),
           IconButton(
+            icon: Icon(Icons.videocam, color: Colors.white),
+            onPressed: () {
+              // 发起视频通话
+              CallManager().startVideoCall(
+                context: context,
+                targetId: widget.targetId,
+                targetName: widget.targetName,
+                targetAvatar: widget.targetAvatar,
+              );
+            },
+          ),
+          IconButton(
             icon: Icon(Icons.more_vert, color: Colors.white),
             onPressed: () {
               // 显示更多选项
@@ -439,6 +451,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             ),
             // 输入框
             _buildInputArea(),
+            // 底部通话按钮栏
+            _buildCallButtonBar(),
           ],
         ),
       ),
@@ -1375,33 +1389,21 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                         _buildMoreItem(Icons.call, '语音通话', () {
                           Navigator.pop(context);
                           // 发起语音通话
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => VoiceCallPage(
-                                userId: widget.userId,
-                                targetId: widget.targetId,
-                                targetName: widget.targetName,
-                                targetAvatar: widget.targetAvatar,
-                                isIncoming: false,
-                              ),
-                            ),
+                          CallManager().startVoiceCall(
+                            context: context,
+                            targetId: widget.targetId,
+                            targetName: widget.targetName,
+                            targetAvatar: widget.targetAvatar,
                           );
                         }),
                         _buildMoreItem(Icons.video_call, '视频通话', () {
                           Navigator.pop(context);
                           // 发起视频通话
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => VideoCallPage(
-                                userId: widget.userId,
-                                targetId: widget.targetId,
-                                targetName: widget.targetName,
-                                targetAvatar: widget.targetAvatar,
-                                isIncoming: false,
-                              ),
-                            ),
+                          CallManager().startVideoCall(
+                            context: context,
+                            targetId: widget.targetId,
+                            targetName: widget.targetName,
+                            targetAvatar: widget.targetAvatar,
                           );
                         }),
                         _buildMoreItem(Icons.card_giftcard, '红包', () {
@@ -2095,5 +2097,105 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       // 往年
       return '${date.year}年${date.month}月${date.day}日 ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
     }
+  }
+
+  // 构建底部通话按钮栏
+  Widget _buildCallButtonBar() {
+    final theme = ThemeManager.currentTheme;
+
+    return Container(
+      padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      decoration: BoxDecoration(
+        color: theme.isDark ? Colors.grey[900] : Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 5,
+            offset: Offset(0, -1),
+          ),
+        ],
+        border: Border(
+          top: BorderSide(
+            color: theme.isDark ? Colors.grey[800]! : Colors.grey[300]!,
+            width: 0.5,
+          ),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _buildCallButton(
+            icon: Icons.call,
+            label: '语音通话',
+            color: Colors.green,
+            onPressed: () {
+              // 发起语音通话
+              CallManager().startVoiceCall(
+                context: context,
+                targetId: widget.targetId,
+                targetName: widget.targetName,
+                targetAvatar: widget.targetAvatar,
+              );
+            },
+          ),
+          _buildCallButton(
+            icon: Icons.videocam,
+            label: '视频通话',
+            color: Colors.blue,
+            onPressed: () {
+              // 发起视频通话
+              CallManager().startVideoCall(
+                context: context,
+                targetId: widget.targetId,
+                targetName: widget.targetName,
+                targetAvatar: widget.targetAvatar,
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 构建通话按钮
+  Widget _buildCallButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                color: color,
+                size: 28,
+              ),
+            ),
+            SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
