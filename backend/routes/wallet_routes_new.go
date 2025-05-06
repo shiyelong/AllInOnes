@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// RegisterWalletRoutesNew 注册钱包相关路由（新版）
+// RegisterWalletRoutesNew 注册钱包相关路由
 func RegisterWalletRoutesNew(r *gin.RouterGroup) {
 	wallet := r.Group("/wallet")
 	wallet.Use(middleware.JWTAuth()) // 确保所有钱包相关API都需要认证

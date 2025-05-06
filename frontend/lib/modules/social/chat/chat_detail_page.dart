@@ -5,20 +5,23 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:cross_file/cross_file.dart';
+import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
 import '../../../common/api.dart';
 import '../../../common/persistence.dart';
 import '../../../common/theme.dart';
 import '../../../common/theme_manager.dart';
 import '../../../common/text_sanitizer.dart';
 import '../../../widgets/app_avatar.dart';
+import '../../../widgets/resizable_panel.dart';
 import 'emoji_picker.dart';
 import 'red_packet_dialog.dart';
 import 'chat_message_item.dart';
-import '../call/voice_call_page.dart';
-import '../call/video_call_page.dart';
-import '../call/enhanced_voice_call_page.dart';
-import '../call/enhanced_video_call_page.dart';
-import '../call/call_manager.dart';
+import 'draggable_chat_input.dart';
+import '../chat/call/voice_call_page.dart';
+import '../chat/call/video_call_page.dart';
+import '../chat/call/simplified/simplified_call_manager.dart';
 import '../../../modules/chat/widgets/voice_recorder_widget.dart';
 import '../../../modules/chat/widgets/voice_message_widget.dart';
 import 'location_picker.dart';
@@ -54,19 +57,16 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   void initState() {
     super.initState();
 
-    // 清理聊天消息，确保没有无效的 UTF-16 字符
-    _clearChatMessages().then((_) {
-      // 首次加载消息，添加重试机制
-      _loadMessages().then((_) {
-        // 如果加载失败且组件仍然挂载，自动重试一次
-        if (_error.isNotEmpty && mounted) {
-          Future.delayed(Duration(seconds: 1), () {
-            if (mounted) {
-              _loadMessages();
-            }
-          });
-        }
-      });
+    // 首次加载消息，添加重试机制
+    _loadMessages().then((_) {
+      // 如果加载失败且组件仍然挂载，自动重试一次
+      if (_error.isNotEmpty && mounted) {
+        Future.delayed(Duration(seconds: 1), () {
+          if (mounted) {
+            _loadMessages();
+          }
+        });
+      }
     });
   }
 
@@ -86,7 +86,24 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
+
+    // 保存消息到本地存储
+    _saveMessages();
+
     super.dispose();
+  }
+
+  // 保存消息到本地存储
+  Future<void> _saveMessages() async {
+    try {
+      if (_messages.isEmpty) return;
+
+      // 保存到本地存储
+      await Persistence.saveChatMessages(widget.userId, widget.targetId, _messages);
+      debugPrint('[ChatDetailPage] 退出时保存了 ${_messages.length} 条消息');
+    } catch (e) {
+      debugPrint('[ChatDetailPage] 保存消息失败: $e');
+    }
   }
 
   Future<void> _loadMessages() async {
@@ -343,11 +360,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             icon: Icon(Icons.phone, color: Colors.white),
             onPressed: () {
               // 发起语音通话
-              CallManager().startVoiceCall(
-                context: context,
-                targetId: widget.targetId,
-                targetName: widget.targetName,
-                targetAvatar: widget.targetAvatar,
+              SimplifiedCallManager().startVoiceCall(
+                widget.targetId,
+                widget.targetName,
+                widget.targetAvatar,
               );
             },
           ),
@@ -355,11 +371,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             icon: Icon(Icons.videocam, color: Colors.white),
             onPressed: () {
               // 发起视频通话
-              CallManager().startVideoCall(
-                context: context,
-                targetId: widget.targetId,
-                targetName: widget.targetName,
-                targetAvatar: widget.targetAvatar,
+              SimplifiedCallManager().startVideoCall(
+                widget.targetId,
+                widget.targetName,
+                widget.targetAvatar,
               );
             },
           ),
@@ -390,11 +405,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                         onTap: () {
                           Navigator.pop(context);
                           // 发起语音通话
-                          CallManager().startVoiceCall(
-                            context: context,
-                            targetId: widget.targetId,
-                            targetName: widget.targetName,
-                            targetAvatar: widget.targetAvatar,
+                          SimplifiedCallManager().startVoiceCall(
+                            widget.targetId,
+                            widget.targetName,
+                            widget.targetAvatar,
                           );
                         },
                       ),
@@ -404,11 +418,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
                         onTap: () {
                           Navigator.pop(context);
                           // 发起视频通话
-                          CallManager().startVideoCall(
-                            context: context,
-                            targetId: widget.targetId,
-                            targetName: widget.targetName,
-                            targetAvatar: widget.targetAvatar,
+                          SimplifiedCallManager().startVideoCall(
+                            widget.targetId,
+                            widget.targetName,
+                            widget.targetAvatar,
                           );
                         },
                       ),
@@ -449,10 +462,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
             Expanded(
               child: _buildMessageList(),
             ),
-            // 输入框
-            _buildInputArea(),
-            // 底部通话按钮栏
-            _buildCallButtonBar(),
+            // 输入区域和通话按钮栏
+            _buildResizableInputArea(),
           ],
         ),
       ),
@@ -716,16 +727,21 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
       if (image == null) return;
 
+      // 生成唯一消息ID
+      final messageId = DateTime.now().millisecondsSinceEpoch.toString();
+      final timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
       // 先添加一条本地消息，提高响应速度
       setState(() {
         _messages.add({
-          'id': DateTime.now().millisecondsSinceEpoch.toString(),
+          'id': messageId,
           'from_id': int.parse(widget.userId),
           'to_id': int.parse(widget.targetId),
           'content': image.path,
           'type': 'image',
-          'created_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+          'created_at': timestamp,
           'status': 0, // 发送中
+          'local_path': image.path, // 保存本地路径，确保即使上传失败也能显示
         });
       });
 
@@ -740,70 +756,70 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         }
       });
 
-      // 上传图片
-      final uploadResponse = await Api.uploadFile(image.path, 'image');
+      // 保存图片到本地存储目录
+      final appDir = await getApplicationDocumentsDirectory();
+      final fileName = 'image_${timestamp}_${path.basename(image.path)}';
+      final savedImagePath = path.join(appDir.path, 'images', fileName);
 
-      if (uploadResponse['success'] == true) {
-        final imageUrl = uploadResponse['data']['url'];
+      // 确保目录存在
+      final imageDir = Directory(path.join(appDir.path, 'images'));
+      if (!await imageDir.exists()) {
+        await imageDir.create(recursive: true);
+      }
 
-        // 发送图片消息
-        final response = await Api.sendImageMessage(
-          int.parse(widget.targetId),
-          imageUrl
-        );
+      // 复制图片到应用目录
+      final savedFile = await File(image.path).copy(savedImagePath);
+      debugPrint('[ChatDetailPage] 图片已保存到本地: $savedImagePath');
 
-        if (response['success'] == true) {
-          // 更新消息状态为已发送
-          setState(() {
-            final index = _messages.indexWhere((msg) =>
-              msg['from_id'] == int.parse(widget.userId) &&
-              msg['content'] == image.path &&
-              msg['status'] == 0
-            );
-
-            if (index != -1) {
-              _messages[index]['status'] = 1; // 已发送
-              _messages[index]['id'] = response['data']['id'] ?? _messages[index]['id'];
-              _messages[index]['content'] = imageUrl; // 更新为服务器URL
-            }
-          });
-        } else {
-          // 更新消息状态为发送失败
-          setState(() {
-            final index = _messages.indexWhere((msg) =>
-              msg['from_id'] == int.parse(widget.userId) &&
-              msg['content'] == image.path &&
-              msg['status'] == 0
-            );
-
-            if (index != -1) {
-              _messages[index]['status'] = 2; // 发送失败
-            }
-          });
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(response['msg'] ?? '发送图片消息失败')),
-          );
+      // 立即更新消息状态为已发送，并使用本地保存的路径
+      setState(() {
+        final index = _messages.indexWhere((msg) => msg['id'] == messageId);
+        if (index != -1) {
+          _messages[index]['status'] = 1; // 已发送
+          _messages[index]['content'] = savedImagePath; // 使用本地保存的路径
         }
-      } else {
-        // 更新消息状态为发送失败
-        setState(() {
-          final index = _messages.indexWhere((msg) =>
-            msg['from_id'] == int.parse(widget.userId) &&
-            msg['content'] == image.path &&
-            msg['status'] == 0
+      });
+
+      // 尝试上传图片到服务器（后台进行）
+      try {
+        debugPrint('[ChatDetailPage] 开始上传图片: ${image.path}');
+        final uploadResponse = await Api.uploadFile(image.path, 'image');
+        debugPrint('[ChatDetailPage] 上传图片响应: $uploadResponse');
+
+        if (uploadResponse['success'] == true) {
+          final imageUrl = uploadResponse['data']['url'];
+          debugPrint('[ChatDetailPage] 图片上传成功，URL: $imageUrl');
+
+          // 发送图片消息
+          final response = await Api.sendImageMessage(
+            int.parse(widget.targetId),
+            imageUrl
           );
+          debugPrint('[ChatDetailPage] 发送图片消息响应: $response');
 
-          if (index != -1) {
-            _messages[index]['status'] = 2; // 发送失败
+          if (response['success'] == true) {
+            // 更新消息ID，但保留本地路径作为内容
+            setState(() {
+              final index = _messages.indexWhere((msg) => msg['id'] == messageId);
+              if (index != -1) {
+                _messages[index]['id'] = response['data']['id'] ?? _messages[index]['id'];
+                _messages[index]['server_url'] = imageUrl; // 保存服务器URL作为备用
+              }
+            });
+          } else {
+            // 服务器消息发送失败，但本地图片已保存
+            debugPrint('[ChatDetailPage] 服务器消息发送失败，但本地图片已保存');
           }
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(uploadResponse['msg'] ?? '上传图片失败')),
-        );
+        } else {
+          // 上传失败，但不影响用户体验，因为图片已经保存在本地并显示
+          debugPrint('[ChatDetailPage] 上传图片失败，但本地图片已保存');
+        }
+      } catch (uploadError) {
+        // 上传失败，但不影响用户体验，因为图片已经保存在本地并显示
+        debugPrint('[ChatDetailPage] 上传图片失败，但本地图片已保存: $uploadError');
       }
     } catch (e) {
+      debugPrint('[ChatDetailPage] 发送图片异常: $e');
       // 更新消息状态为发送失败
       setState(() {
         final index = _messages.indexWhere((msg) =>
@@ -814,6 +830,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
         if (index != -1) {
           _messages[index]['status'] = 2; // 发送失败
+          // 保留本地路径作为内容，确保图片仍然可见
         }
       });
 
@@ -1212,6 +1229,31 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     }
   }
 
+  // 构建可调整大小的输入区域
+  Widget _buildResizableInputArea() {
+    final theme = ThemeManager.currentTheme;
+
+    // 使用垂直可调整大小的面板
+    return VerticalResizablePanel(
+      initialHeight: 150, // 初始高度
+      minHeight: 100,     // 最小高度
+      maxHeight: 400,     // 最大高度
+      resizeFromBottom: false, // 从顶部调整大小
+      dividerColor: theme.isDark ? Colors.grey[700] : Colors.grey[300],
+      dividerHeight: 4,
+      child: Column(
+        children: [
+          // 输入框
+          Expanded(
+            child: _buildInputArea(),
+          ),
+          // 底部通话按钮栏
+          _buildCallButtonBar(),
+        ],
+      ),
+    );
+  }
+
   Widget _buildInputArea() {
     final theme = ThemeManager.currentTheme;
 
@@ -1232,489 +1274,503 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
       );
     }
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // 表情选择器
-        if (_showEmoji)
-          Container(
-            height: 250,
-            decoration: BoxDecoration(
-              color: theme.isDark ? Colors.grey[900] : Colors.grey[100],
-              border: Border(
-                top: BorderSide(
-                  color: theme.isDark ? Colors.grey[800]! : Colors.grey[300]!,
-                  width: 0.5,
-                ),
-              ),
-            ),
-            child: EmojiPicker(
-              onSelected: (emoji) {
-                // 将表情插入到输入框而不是直接发送
-                final currentText = _messageController.text;
-                final selection = _messageController.selection;
-                final newText = currentText.replaceRange(
-                  selection.start,
-                  selection.end,
-                  emoji,
-                );
-                _messageController.text = newText;
-                _messageController.selection = TextSelection.collapsed(
-                  offset: selection.baseOffset + emoji.length,
-                );
-              },
-            ),
-          ),
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          decoration: BoxDecoration(
-            color: theme.isDark ? Colors.grey[900] : Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 5,
-                offset: Offset(0, -1),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              IconButton(
-                icon: Icon(
-                  Icons.emoji_emotions_outlined,
-                  color: _showEmoji ? theme.primaryColor : Colors.grey[600],
-                  size: 24,
-                ),
-                onPressed: () {
-                  // 切换表情选择器状态
-                  setState(() {
-                    _showEmoji = !_showEmoji;
-                  });
+    // 使用新的拖放聊天输入组件
+    return DraggableChatInput(
+      onSendText: (text) {
+        _messageController.text = text;
+        _sendMessage();
+      },
+      onSendImage: (image, path) async {
+        // 先添加一条本地消息，提高响应速度
+        final messageId = DateTime.now().millisecondsSinceEpoch.toString();
+        setState(() {
+          _messages.add({
+            'id': messageId,
+            'from_id': int.parse(widget.userId),
+            'to_id': int.parse(widget.targetId),
+            'content': path,
+            'type': 'image',
+            'created_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            'status': 0, // 发送中
+          });
+        });
 
-                  if (_showEmoji) {
-                    // 如果显示表情选择器，确保输入框获得焦点
-                    FocusScope.of(context).requestFocus(FocusNode());
-                  } else {
-                    // 如果隐藏表情选择器，重新聚焦到输入框
-                    FocusScope.of(context).requestFocus(FocusNode());
-                    // 延迟一下再聚焦到输入框，确保表情选择器已经收起
-                    Future.delayed(Duration(milliseconds: 100), () {
-                      if (mounted) {
-                        // 创建一个新的焦点节点并请求焦点
-                        final focusNode = FocusNode();
-                        FocusScope.of(context).requestFocus(focusNode);
-                        // 确保输入框获得焦点
-                        _messageController.selection = TextSelection.fromPosition(
-                          TextPosition(offset: _messageController.text.length),
-                        );
-                      }
+        // 滚动到底部
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            );
+          }
+        });
+
+        try {
+          // 检查路径是否是URL
+          if (path.startsWith('http://') || path.startsWith('https://')) {
+            // 已经是服务器URL，直接更新状态为已发送
+            setState(() {
+              final index = _messages.indexWhere((msg) => msg['id'] == messageId);
+              if (index != -1) {
+                _messages[index]['status'] = 1; // 已发送
+              }
+            });
+          } else {
+            // 本地文件路径，尝试上传到服务器
+            final uploadResponse = await Api.uploadFile(path, 'image');
+
+            if (uploadResponse['success'] == true) {
+              final imageUrl = uploadResponse['data']['url'];
+              debugPrint('[ChatDetailPage] 图片上传成功: $imageUrl');
+
+              // 保存本地路径和服务器URL的映射关系
+              setState(() {
+                final index = _messages.indexWhere((msg) => msg['id'] == messageId);
+                if (index != -1) {
+                  _messages[index]['server_url'] = imageUrl; // 保存服务器URL
+                }
+              });
+
+              // 发送图片消息
+              final response = await Api.sendImageMessage(
+                int.parse(widget.targetId),
+                imageUrl
+              );
+
+              if (response['success'] == true) {
+                // 更新消息状态为已发送
+                setState(() {
+                  final index = _messages.indexWhere((msg) => msg['id'] == messageId);
+                  if (index != -1) {
+                    _messages[index]['status'] = 1; // 已发送
+                    _messages[index]['id'] = response['data']['id'] ?? messageId;
+                    _messages[index]['server_url'] = imageUrl; // 保存服务器URL
+                  }
+                });
+              } else {
+                // 服务器消息发送失败，但本地图片已保存
+                setState(() {
+                  final index = _messages.indexWhere((msg) => msg['id'] == messageId);
+                  if (index != -1) {
+                    _messages[index]['status'] = 2; // 发送失败
+                  }
+                });
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(response['msg'] ?? '发送图片消息失败')),
+                );
+              }
+            } else {
+              // 上传失败
+              setState(() {
+                final index = _messages.indexWhere((msg) => msg['id'] == messageId);
+                if (index != -1) {
+                  _messages[index]['status'] = 2; // 发送失败
+                }
+              });
+
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(uploadResponse['msg'] ?? '上传图片失败')),
+              );
+            }
+          }
+        } catch (e) {
+          debugPrint('[ChatDetailPage] 处理图片消息出错: $e');
+
+          // 更新消息状态为发送失败
+          setState(() {
+            final index = _messages.indexWhere((msg) => msg['id'] == messageId);
+            if (index != -1) {
+              _messages[index]['status'] = 2; // 发送失败
+            }
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('处理图片消息出错: $e')),
+          );
+        }
+      },
+      onSendVideo: (video, path) async {
+        // 先添加一条本地消息，提高响应速度
+        final messageId = DateTime.now().millisecondsSinceEpoch.toString();
+        setState(() {
+          _messages.add({
+            'id': messageId,
+            'from_id': int.parse(widget.userId),
+            'to_id': int.parse(widget.targetId),
+            'content': path,
+            'type': 'video',
+            'created_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            'status': 0, // 发送中
+          });
+        });
+
+        // 滚动到底部
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            );
+          }
+        });
+
+        try {
+          // 检查路径是否是URL
+          if (path.startsWith('http://') || path.startsWith('https://')) {
+            // 已经是服务器URL，直接更新状态为已发送
+            setState(() {
+              final index = _messages.indexWhere((msg) => msg['id'] == messageId);
+              if (index != -1) {
+                _messages[index]['status'] = 1; // 已发送
+              }
+            });
+          } else {
+            // 本地文件路径，尝试上传到服务器
+            final uploadResponse = await Api.uploadFile(path, 'video');
+
+            if (uploadResponse['success'] == true) {
+              final videoUrl = uploadResponse['data']['url'];
+              debugPrint('[ChatDetailPage] 视频上传成功: $videoUrl');
+
+              // 保存本地路径和服务器URL的映射关系
+              setState(() {
+                final index = _messages.indexWhere((msg) => msg['id'] == messageId);
+                if (index != -1) {
+                  _messages[index]['server_url'] = videoUrl; // 保存服务器URL
+                }
+              });
+
+              // 发送视频消息
+              final response = await Api.sendVideoMessage(
+                int.parse(widget.targetId),
+                videoUrl,
+                null // 暂时不提供缩略图
+              );
+
+              if (response['success'] == true) {
+                // 更新消息状态为已发送
+                setState(() {
+                  final index = _messages.indexWhere((msg) => msg['id'] == messageId);
+                  if (index != -1) {
+                    _messages[index]['status'] = 1; // 已发送
+                    _messages[index]['id'] = response['data']['id'] ?? messageId;
+                    _messages[index]['content'] = videoUrl; // 更新为服务器URL
+                  }
+                });
+              } else {
+                // 服务器消息发送失败
+                setState(() {
+                  final index = _messages.indexWhere((msg) => msg['id'] == messageId);
+                  if (index != -1) {
+                    _messages[index]['status'] = 2; // 发送失败
+                  }
+                });
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(response['msg'] ?? '发送视频消息失败')),
+                );
+              }
+            } else {
+              // 上传失败
+              setState(() {
+                final index = _messages.indexWhere((msg) => msg['id'] == messageId);
+                if (index != -1) {
+                  _messages[index]['status'] = 2; // 发送失败
+                }
+              });
+
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(uploadResponse['msg'] ?? '上传视频失败')),
+              );
+            }
+          }
+        } catch (e) {
+          debugPrint('[ChatDetailPage] 处理视频消息出错: $e');
+
+          // 更新消息状态为发送失败
+          setState(() {
+            final index = _messages.indexWhere((msg) => msg['id'] == messageId);
+            if (index != -1) {
+              _messages[index]['status'] = 2; // 发送失败
+            }
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('处理视频消息出错: $e')),
+          );
+        }
+      },
+      onSendFile: (file, path, fileName) async {
+        // 先添加一条本地消息，提高响应速度
+        final messageId = DateTime.now().millisecondsSinceEpoch.toString();
+        setState(() {
+          _messages.add({
+            'id': messageId,
+            'from_id': int.parse(widget.userId),
+            'to_id': int.parse(widget.targetId),
+            'content': fileName,
+            'extra': path,
+            'type': 'file',
+            'created_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            'status': 0, // 发送中
+          });
+        });
+
+        // 滚动到底部
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            );
+          }
+        });
+
+        try {
+          // 检查路径是否是URL
+          if (path.startsWith('http://') || path.startsWith('https://')) {
+            // 已经是服务器URL，直接更新状态为已发送
+            setState(() {
+              final index = _messages.indexWhere((msg) => msg['id'] == messageId);
+              if (index != -1) {
+                _messages[index]['status'] = 1; // 已发送
+              }
+            });
+          } else {
+            // 本地文件路径，尝试上传到服务器
+            final uploadResponse = await Api.uploadFile(path, 'file');
+
+            if (uploadResponse['success'] == true) {
+              final fileUrl = uploadResponse['data']['url'];
+              final fileSize = uploadResponse['data']['file_size'] ?? await file.length();
+              debugPrint('[ChatDetailPage] 文件上传成功: $fileUrl');
+
+              // 保存本地路径和服务器URL的映射关系
+              setState(() {
+                final index = _messages.indexWhere((msg) => msg['id'] == messageId);
+                if (index != -1) {
+                  _messages[index]['server_url'] = fileUrl; // 保存服务器URL
+                }
+              });
+
+              // 发送文件消息
+              final response = await Api.sendFileMessage(
+                int.parse(widget.targetId),
+                fileUrl,
+                fileName,
+                fileSize
+              );
+
+              if (response['success'] == true) {
+                // 更新消息状态为已发送
+                setState(() {
+                  final index = _messages.indexWhere((msg) => msg['id'] == messageId);
+                  if (index != -1) {
+                    _messages[index]['status'] = 1; // 已发送
+                    _messages[index]['id'] = response['data']['id'] ?? messageId;
+                    _messages[index]['extra'] = jsonEncode({
+                      'url': fileUrl,
+                      'name': fileName,
+                      'size': fileSize
                     });
                   }
-                },
-              ),
-              IconButton(
-                icon: Icon(
-                  Icons.add_circle_outline,
-                  color: Colors.grey[600],
-                  size: 24,
-                ),
-                onPressed: () {
-                  // 显示更多功能
-                  showModalBottomSheet(
-                    context: context,
-                    backgroundColor: theme.isDark ? Colors.grey[900] : Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-                    ),
-                    builder: (context) => GridView.count(
-                      crossAxisCount: 4,
-                      shrinkWrap: true,
-                      padding: EdgeInsets.all(16),
-                      children: [
-                        _buildMoreItem(Icons.image, '图片', () {
-                          Navigator.pop(context);
-                          _sendImage();
-                        }),
-                        _buildMoreItem(Icons.camera_alt, '拍照', () {
-                          Navigator.pop(context);
-                          // 使用相机拍照
-                          ImagePicker().pickImage(source: ImageSource.camera).then((image) {
-                            if (image != null) {
-                              // 处理拍照结果
-                              // 这里可以复用_sendImage的逻辑
-                              // 先添加一条本地消息，提高响应速度
-                              setState(() {
-                                _messages.add({
-                                  'id': DateTime.now().millisecondsSinceEpoch.toString(),
-                                  'from_id': int.parse(widget.userId),
-                                  'to_id': int.parse(widget.targetId),
-                                  'content': image.path,
-                                  'type': 'image',
-                                  'created_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-                                  'status': 0, // 发送中
-                                });
-                              });
+                });
+              } else {
+                // 服务器消息发送失败
+                setState(() {
+                  final index = _messages.indexWhere((msg) => msg['id'] == messageId);
+                  if (index != -1) {
+                    _messages[index]['status'] = 2; // 发送失败
+                  }
+                });
 
-                              // 模拟发送成功
-                              Future.delayed(Duration(seconds: 1), () {
-                                setState(() {
-                                  final index = _messages.indexWhere((msg) =>
-                                    msg['from_id'] == int.parse(widget.userId) &&
-                                    msg['content'] == image.path &&
-                                    msg['status'] == 0
-                                  );
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(response['msg'] ?? '发送文件消息失败')),
+                );
+              }
+            } else {
+              // 上传失败
+              setState(() {
+                final index = _messages.indexWhere((msg) => msg['id'] == messageId);
+                if (index != -1) {
+                  _messages[index]['status'] = 2; // 发送失败
+                }
+              });
 
-                                  if (index != -1) {
-                                    _messages[index]['status'] = 1; // 已发送
-                                  }
-                                });
-                              });
-                            }
-                          });
-                        }),
-                        _buildMoreItem(Icons.videocam, '视频', () {
-                          Navigator.pop(context);
-                          _sendVideo();
-                        }),
-                        _buildMoreItem(Icons.file_copy, '文件', () {
-                          Navigator.pop(context);
-                          _sendFile();
-                        }),
-                        _buildMoreItem(Icons.mic, '语音消息', () {
-                          Navigator.pop(context);
-                          setState(() {
-                            _isRecording = true;
-                          });
-                        }),
-                        _buildMoreItem(Icons.call, '语音通话', () {
-                          Navigator.pop(context);
-                          // 发起语音通话
-                          CallManager().startVoiceCall(
-                            context: context,
-                            targetId: widget.targetId,
-                            targetName: widget.targetName,
-                            targetAvatar: widget.targetAvatar,
-                          );
-                        }),
-                        _buildMoreItem(Icons.video_call, '视频通话', () {
-                          Navigator.pop(context);
-                          // 发起视频通话
-                          CallManager().startVideoCall(
-                            context: context,
-                            targetId: widget.targetId,
-                            targetName: widget.targetName,
-                            targetAvatar: widget.targetAvatar,
-                          );
-                        }),
-                        _buildMoreItem(Icons.card_giftcard, '红包', () {
-                          Navigator.pop(context);
-                          // 显示红包对话框
-                          showDialog(
-                            context: context,
-                            builder: (context) => RedPacketDialog(
-                              receiverId: int.parse(widget.targetId),
-                              onSend: (amount, greeting) async {
-                                // 获取用户信息
-                                final userInfo = Persistence.getUserInfo();
-                                if (userInfo == null) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('用户信息不存在，请重新登录')),
-                                  );
-                                  return;
-                                }
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(uploadResponse['msg'] ?? '上传文件失败')),
+              );
+            }
+          }
+        } catch (e) {
+          debugPrint('[ChatDetailPage] 处理文件消息出错: $e');
 
-                                // 先添加一条本地消息，提高响应速度
-                                setState(() {
-                                  _messages.add({
-                                    'id': DateTime.now().millisecondsSinceEpoch.toString(),
-                                    'from_id': int.parse(widget.userId),
-                                    'to_id': int.parse(widget.targetId),
-                                    'content': greeting,
-                                    'type': 'redpacket',
-                                    'created_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-                                    'status': 0, // 发送中
-                                    'extra': jsonEncode({
-                                      'amount': amount,
-                                      'count': 1,
-                                    }),
-                                  });
-                                });
+          // 更新消息状态为发送失败
+          setState(() {
+            final index = _messages.indexWhere((msg) => msg['id'] == messageId);
+            if (index != -1) {
+              _messages[index]['status'] = 2; // 发送失败
+            }
+          });
 
-                                // 滚动到底部
-                                WidgetsBinding.instance.addPostFrameCallback((_) {
-                                  if (_scrollController.hasClients) {
-                                    _scrollController.animateTo(
-                                      _scrollController.position.maxScrollExtent,
-                                      duration: Duration(milliseconds: 300),
-                                      curve: Curves.easeOut,
-                                    );
-                                  }
-                                });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('处理文件消息出错: $e')),
+          );
+        }
+      },
+      onSendEmoji: (emoji) {
+        // 将表情插入到输入框
+        final currentText = _messageController.text;
+        final selection = _messageController.selection;
+        final newText = currentText.replaceRange(
+          selection.start,
+          selection.end,
+          emoji,
+        );
+        _messageController.text = newText;
+        _messageController.selection = TextSelection.collapsed(
+          offset: selection.baseOffset + emoji.length,
+        );
+      },
+      onStartVoiceCall: () {
+        // 发起语音通话
+        CallManager().startVoiceCall(
+          context: context,
+          targetId: widget.targetId,
+          targetName: widget.targetName,
+          targetAvatar: widget.targetAvatar,
+        );
+      },
+      onStartVideoCall: () {
+        // 发起视频通话
+        CallManager().startVideoCall(
+          context: context,
+          targetId: widget.targetId,
+          targetName: widget.targetName,
+          targetAvatar: widget.targetAvatar,
+        );
+      },
+      onSendRedPacket: (amount, greeting) async {
+        // 获取用户信息
+        final userInfo = Persistence.getUserInfo();
+        if (userInfo == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('用户信息不存在，请重新登录')),
+          );
+          return;
+        }
 
-                                try {
-                                  // 发送红包
-                                  final resp = await Api.sendRedPacketWithWallet(
-                                    senderID: userInfo.id.toString(),
-                                    receiverID: widget.targetId,
-                                    amount: amount,
-                                    count: 1,
-                                    greeting: greeting,
-                                  );
+        // 先添加一条本地消息，提高响应速度
+        setState(() {
+          _messages.add({
+            'id': DateTime.now().millisecondsSinceEpoch.toString(),
+            'from_id': int.parse(widget.userId),
+            'to_id': int.parse(widget.targetId),
+            'content': greeting,
+            'type': 'redpacket',
+            'created_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            'status': 0, // 发送中
+            'extra': jsonEncode({
+              'amount': amount,
+              'count': 1,
+            }),
+          });
+        });
 
-                                  if (resp['success'] == true) {
-                                    // 更新消息状态为已发送
-                                    setState(() {
-                                      final index = _messages.indexWhere((msg) =>
-                                        msg['from_id'] == int.parse(widget.userId) &&
-                                        msg['content'] == greeting &&
-                                        msg['type'] == 'redpacket' &&
-                                        msg['status'] == 0
-                                      );
+        // 滚动到底部
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            );
+          }
+        });
 
-                                      if (index != -1) {
-                                        _messages[index]['status'] = 1; // 已发送
-                                        _messages[index]['id'] = resp['data']['message_id'] ?? _messages[index]['id'];
+        try {
+          // 发送红包
+          final resp = await Api.sendRedPacketWithWallet(
+            senderID: userInfo.id.toString(),
+            receiverID: widget.targetId,
+            amount: amount,
+            count: 1,
+            greeting: greeting,
+          );
 
-                                        // 更新红包ID
-                                        final extra = jsonDecode(_messages[index]['extra'] ?? '{}');
-                                        extra['red_packet_id'] = resp['data']['red_packet_id'];
-                                        _messages[index]['extra'] = jsonEncode(extra);
-                                      }
-                                    });
+          if (resp['success'] == true) {
+            // 更新消息状态为已发送
+            setState(() {
+              final index = _messages.indexWhere((msg) =>
+                msg['from_id'] == int.parse(widget.userId) &&
+                msg['content'] == greeting &&
+                msg['type'] == 'redpacket' &&
+                msg['status'] == 0
+              );
 
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('红包发送成功'), backgroundColor: Colors.green),
-                                    );
-                                  } else {
-                                    // 更新消息状态为发送失败
-                                    setState(() {
-                                      final index = _messages.indexWhere((msg) =>
-                                        msg['from_id'] == int.parse(widget.userId) &&
-                                        msg['content'] == greeting &&
-                                        msg['type'] == 'redpacket' &&
-                                        msg['status'] == 0
-                                      );
+              if (index != -1) {
+                _messages[index]['status'] = 1; // 已发送
+                _messages[index]['id'] = resp['data']['message_id'] ?? _messages[index]['id'];
 
-                                      if (index != -1) {
-                                        _messages[index]['status'] = 2; // 发送失败
-                                      }
-                                    });
+                // 更新红包ID
+                final extra = jsonDecode(_messages[index]['extra'] ?? '{}');
+                extra['red_packet_id'] = resp['data']['red_packet_id'];
+                _messages[index]['extra'] = jsonEncode(extra);
+              }
+            });
 
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text(resp['msg'] ?? '发送红包失败'), backgroundColor: Colors.red),
-                                    );
-                                  }
-                                } catch (e) {
-                                  // 更新消息状态为发送失败
-                                  setState(() {
-                                    final index = _messages.indexWhere((msg) =>
-                                      msg['from_id'] == int.parse(widget.userId) &&
-                                      msg['content'] == greeting &&
-                                      msg['type'] == 'redpacket' &&
-                                      msg['status'] == 0
-                                    );
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('红包发送成功'), backgroundColor: Colors.green),
+            );
+          } else {
+            // 更新消息状态为发送失败
+            setState(() {
+              final index = _messages.indexWhere((msg) =>
+                msg['from_id'] == int.parse(widget.userId) &&
+                msg['content'] == greeting &&
+                msg['type'] == 'redpacket' &&
+                msg['status'] == 0
+              );
 
-                                    if (index != -1) {
-                                      _messages[index]['status'] = 2; // 发送失败
-                                    }
-                                  });
+              if (index != -1) {
+                _messages[index]['status'] = 2; // 发送失败
+              }
+            });
 
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('发送红包出错: $e'), backgroundColor: Colors.red),
-                                  );
-                                }
-                              },
-                            ),
-                          );
-                        }),
-                        _buildMoreItem(Icons.location_on, '位置', () {
-                          Navigator.pop(context);
-                          // 显示位置选择对话框
-                          showDialog(
-                            context: context,
-                            builder: (context) => LocationPickerDialog(
-                              onLocationSelected: (latitude, longitude, address) {
-                                _sendLocationMessage(latitude, longitude, address);
-                              },
-                            ),
-                          );
-                        }),
-                        _buildMoreItem(Icons.account_balance_wallet, '转账', () {
-                          Navigator.pop(context);
-                          // 显示转账对话框
-                          final amountController = TextEditingController();
-                          final messageController = TextEditingController();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(resp['msg'] ?? '发送红包失败'), backgroundColor: Colors.red),
+            );
+          }
+        } catch (e) {
+          // 更新消息状态为发送失败
+          setState(() {
+            final index = _messages.indexWhere((msg) =>
+              msg['from_id'] == int.parse(widget.userId) &&
+              msg['content'] == greeting &&
+              msg['type'] == 'redpacket' &&
+              msg['status'] == 0
+            );
 
-                          showDialog(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: Text('转账'),
-                              content: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  TextField(
-                                    controller: amountController,
-                                    decoration: InputDecoration(
-                                      labelText: '金额',
-                                      hintText: '请输入转账金额',
-                                      prefixIcon: Icon(Icons.attach_money),
-                                      border: OutlineInputBorder(),
-                                    ),
-                                    keyboardType: TextInputType.numberWithOptions(decimal: true),
-                                  ),
-                                  SizedBox(height: 16),
-                                  TextField(
-                                    controller: messageController,
-                                    decoration: InputDecoration(
-                                      labelText: '留言',
-                                      hintText: '请输入转账留言（可选）',
-                                      prefixIcon: Icon(Icons.message),
-                                      border: OutlineInputBorder(),
-                                    ),
-                                    maxLines: 2,
-                                  ),
-                                ],
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: Text('取消'),
-                                ),
-                                ElevatedButton(
-                                  onPressed: () async {
-                                    final amount = double.tryParse(amountController.text);
-                                    if (amount != null && amount > 0) {
-                                      Navigator.pop(context);
+            if (index != -1) {
+              _messages[index]['status'] = 2; // 发送失败
+            }
+          });
 
-                                      final userInfo = Persistence.getUserInfo();
-                                      if (userInfo == null) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(content: Text('用户信息不存在，请重新登录')),
-                                        );
-                                        return;
-                                      }
-
-                                      try {
-                                        final resp = await Api.transfer(
-                                          senderID: userInfo.id,
-                                          receiverID: int.parse(widget.targetId),
-                                          amount: amount,
-                                          message: messageController.text,
-                                        );
-
-                                        if (resp['success'] == true) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(content: Text('转账成功'), backgroundColor: Colors.green),
-                                          );
-
-                                          // 添加转账消息
-                                          setState(() {
-                                            _messages.add({
-                                              'id': DateTime.now().millisecondsSinceEpoch.toString(),
-                                              'from_id': int.parse(widget.userId),
-                                              'to_id': int.parse(widget.targetId),
-                                              'content': messageController.text,
-                                              'type': 'transfer',
-                                              'extra': '{"amount": ${amount.toStringAsFixed(2)}}',
-                                              'created_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-                                              'status': 1, // 已发送
-                                            });
-                                          });
-                                        } else {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(content: Text(resp['msg'] ?? '转账失败'), backgroundColor: Colors.red),
-                                          );
-                                        }
-                                      } catch (e) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(content: Text('网络异常: $e'), backgroundColor: Colors.red),
-                                        );
-                                      }
-                                    } else {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text('请输入有效金额')),
-                                      );
-                                    }
-                                  },
-                                  child: Text('转账'),
-                                ),
-                              ],
-                            ),
-                          );
-                        }),
-                      ],
-                    ),
-                  );
-                },
-              ),
-              // 语音按钮
-              IconButton(
-                icon: Icon(
-                  Icons.mic,
-                  color: Colors.grey[600],
-                  size: 24,
-                ),
-                onPressed: () {
-                  setState(() {
-                    _isRecording = true;
-                  });
-                },
-              ),
-              Expanded(
-                child: Container(
-                  margin: EdgeInsets.symmetric(horizontal: 4),
-                  decoration: BoxDecoration(
-                    color: theme.isDark ? Colors.grey[800] : Colors.grey[100],
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: IgnorePointer(
-                    ignoring: false, // 设置为true可以禁用拖拽，但会影响正常输入
-                    child: AbsorbPointer(
-                      absorbing: false, // 设置为true可以禁用拖拽，但会影响正常输入
-                      child: DragTarget<String>(
-                        onWillAccept: (data) {
-                          // 拒绝所有拖拽
-                          return false;
-                        },
-                        builder: (context, candidateData, rejectedData) {
-                          return TextField(
-                            controller: _messageController,
-                            decoration: InputDecoration(
-                              hintText: '输入消息...',
-                              hintStyle: TextStyle(
-                                color: theme.isDark ? Colors.grey[400] : Colors.grey[600],
-                              ),
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                            ),
-                            style: TextStyle(
-                              color: theme.isDark ? Colors.white : Colors.black,
-                            ),
-                            textInputAction: TextInputAction.send,
-                            onSubmitted: (_) => _sendMessage(),
-                            // 禁用拖拽功能
-                            enableInteractiveSelection: true, // 允许文本选择
-                            maxLines: 4, // 限制最大行数
-                            minLines: 1, // 最小行数
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              IconButton(
-                icon: Icon(
-                  Icons.send,
-                  color: theme.primaryColor,
-                  size: 24,
-                ),
-                onPressed: _sendMessage,
-              ),
-            ],
-          ),
-        ),
-      ],
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('发送红包出错: $e'), backgroundColor: Colors.red),
+          );
+        }
+      },
+      onSendLocation: (latitude, longitude, address) {
+        _sendLocationMessage(latitude, longitude, address);
+      },
+      targetId: widget.targetId,
+      targetName: widget.targetName,
+      targetAvatar: widget.targetAvatar,
     );
   }
 
@@ -2006,45 +2062,117 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
 
   // 构建图片消息组件
   Widget _buildImageWidget(String imagePath) {
+    debugPrint('[ChatDetailPage] 构建图片组件，路径: $imagePath');
+
     // 检查是否是本地文件路径
     if (imagePath.startsWith('/') || imagePath.startsWith('file://')) {
+      String path = imagePath;
+      if (imagePath.startsWith('file://')) {
+        path = imagePath.substring(7); // 移除 'file://' 前缀
+      }
+
+      // 检查文件是否存在
+      final file = File(path);
+      if (!file.existsSync()) {
+        debugPrint('[ChatDetailPage] 本地文件不存在: $path');
+        return Container(
+          width: 150,
+          height: 150,
+          color: Colors.grey[300],
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.broken_image, color: Colors.grey[600], size: 40),
+              SizedBox(height: 8),
+              Text('图片不存在', style: TextStyle(color: Colors.grey[600])),
+            ],
+          ),
+        );
+      }
+
       // 本地文件路径
-      return Image.file(
-        File(imagePath),
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
-          print('Error loading image file: $error');
-          return Container(
-            color: Colors.grey[300],
-            child: Icon(Icons.broken_image, color: Colors.grey[600]),
-          );
-        },
-      );
-    } else if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
-      // 网络图片URL
-      return Image.network(
-        imagePath,
-        fit: BoxFit.cover,
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          return Container(
-            color: Colors.grey[300],
-            child: Center(
-              child: CircularProgressIndicator(
-                value: loadingProgress.expectedTotalBytes != null
-                    ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                    : null,
-              ),
+      return GestureDetector(
+        onTap: () {
+          // 点击查看大图
+          showDialog(
+            context: context,
+            builder: (context) => Dialog(
+              child: Image.file(File(path)),
             ),
           );
         },
-        errorBuilder: (context, error, stackTrace) {
-          print('Error loading network image: $error');
-          return Container(
-            color: Colors.grey[300],
-            child: Icon(Icons.broken_image, color: Colors.grey[600]),
+        child: Image.file(
+          File(path),
+          fit: BoxFit.cover,
+          width: 200,
+          height: 200,
+          errorBuilder: (context, error, stackTrace) {
+            debugPrint('[ChatDetailPage] 加载本地图片出错: $error');
+            return Container(
+              width: 150,
+              height: 150,
+              color: Colors.grey[300],
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.broken_image, color: Colors.grey[600], size: 40),
+                  SizedBox(height: 8),
+                  Text('图片加载失败', style: TextStyle(color: Colors.grey[600])),
+                ],
+              ),
+            );
+          },
+        ),
+      );
+    } else if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      // 网络图片URL
+      return GestureDetector(
+        onTap: () {
+          // 点击查看大图
+          showDialog(
+            context: context,
+            builder: (context) => Dialog(
+              child: Image.network(imagePath),
+            ),
           );
         },
+        child: Image.network(
+          imagePath,
+          fit: BoxFit.cover,
+          width: 200,
+          height: 200,
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return Container(
+              width: 150,
+              height: 150,
+              color: Colors.grey[300],
+              child: Center(
+                child: CircularProgressIndicator(
+                  value: loadingProgress.expectedTotalBytes != null
+                      ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                      : null,
+                ),
+              ),
+            );
+          },
+          errorBuilder: (context, error, stackTrace) {
+            debugPrint('[ChatDetailPage] 加载网络图片出错: $error');
+            return Container(
+              width: 150,
+              height: 150,
+              color: Colors.grey[300],
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.broken_image, color: Colors.grey[600], size: 40),
+                  SizedBox(height: 8),
+                  Text('图片加载失败', style: TextStyle(color: Colors.grey[600])),
+                ],
+              ),
+            );
+          },
+        ),
       );
     } else {
       // 可能是相对路径或API路径，尝试添加基础URL
@@ -2053,29 +2181,55 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
           ? '$baseUrl$imagePath'
           : '$baseUrl/$imagePath';
 
-      return Image.network(
-        fullUrl,
-        fit: BoxFit.cover,
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          return Container(
-            color: Colors.grey[300],
-            child: Center(
-              child: CircularProgressIndicator(
-                value: loadingProgress.expectedTotalBytes != null
-                    ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                    : null,
-              ),
+      debugPrint('[ChatDetailPage] 尝试加载服务器图片: $fullUrl');
+
+      return GestureDetector(
+        onTap: () {
+          // 点击查看大图
+          showDialog(
+            context: context,
+            builder: (context) => Dialog(
+              child: Image.network(fullUrl),
             ),
           );
         },
-        errorBuilder: (context, error, stackTrace) {
-          print('Error loading image with base URL: $error');
-          return Container(
-            color: Colors.grey[300],
-            child: Icon(Icons.broken_image, color: Colors.grey[600]),
-          );
-        },
+        child: Image.network(
+          fullUrl,
+          fit: BoxFit.cover,
+          width: 200,
+          height: 200,
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return Container(
+              width: 150,
+              height: 150,
+              color: Colors.grey[300],
+              child: Center(
+                child: CircularProgressIndicator(
+                  value: loadingProgress.expectedTotalBytes != null
+                      ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                      : null,
+                ),
+              ),
+            );
+          },
+          errorBuilder: (context, error, stackTrace) {
+            debugPrint('[ChatDetailPage] 加载服务器图片出错: $error');
+            return Container(
+              width: 150,
+              height: 150,
+              color: Colors.grey[300],
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.broken_image, color: Colors.grey[600], size: 40),
+                  SizedBox(height: 8),
+                  Text('图片加载失败', style: TextStyle(color: Colors.grey[600])),
+                ],
+              ),
+            );
+          },
+        ),
       );
     }
   }

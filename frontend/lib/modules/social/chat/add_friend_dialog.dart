@@ -24,11 +24,17 @@ class _AddFriendDialogState extends State<AddFriendDialog> with SingleTickerProv
   // 搜索结果
   List<Map<String, dynamic>> _searchResults = [];
 
+  // 推荐好友列表
+  List<Map<String, dynamic>> _recommendedFriends = [];
+
   // 选中的用户
   Map<String, dynamic>? _selectedUser;
 
   // 添加好友的来源
   String _sourceType = 'search'; // search, scan, recommend
+
+  // 性别筛选
+  String? _selectedGender;
 
   // 标签控制器
   late TabController _tabController;
@@ -36,10 +42,13 @@ class _AddFriendDialogState extends State<AddFriendDialog> with SingleTickerProv
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
 
     // 默认验证消息
     _messageController.text = '我是${Persistence.getUserInfo()?.nickname ?? Persistence.getUserInfo()?.account ?? ''}，请求添加您为好友';
+
+    // 加载推荐好友
+    _loadRecommendedFriends();
   }
 
   @override
@@ -48,6 +57,57 @@ class _AddFriendDialogState extends State<AddFriendDialog> with SingleTickerProv
     _messageController.dispose();
     _tabController.dispose();
     super.dispose();
+  }
+
+  // 加载推荐好友
+  Future<void> _loadRecommendedFriends() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final userId = Persistence.getUserInfo()?.id;
+      if (userId == null) {
+        setState(() {
+          _error = '未获取到当前用户信息，请重新登录';
+          _loading = false;
+        });
+        return;
+      }
+
+      // 调用API获取推荐好友
+      final response = await Api.getRecommendedFriends(
+        currentUserId: userId.toString(),
+        limit: 20,
+        gender: _selectedGender,
+      );
+
+      debugPrint('推荐好友响应: $response');
+
+      if (response['success'] == true) {
+        final results = List<Map<String, dynamic>>.from(response['data'] ?? []);
+
+        setState(() {
+          _recommendedFriends = results;
+          _loading = false;
+        });
+
+        if (results.isEmpty) {
+          setState(() => _error = '暂无推荐好友');
+        }
+      } else {
+        setState(() {
+          _error = response['msg'] ?? '获取推荐好友失败';
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _error = '网络异常或服务器错误: $e';
+        _loading = false;
+      });
+    }
   }
 
   // 搜索用户
@@ -79,6 +139,7 @@ class _AddFriendDialogState extends State<AddFriendDialog> with SingleTickerProv
       final response = await Api.searchUsers(
         keyword: keyword,
         currentUserId: userId.toString(),
+        gender: _selectedGender,
       );
 
       if (response['success'] == true) {
@@ -244,6 +305,7 @@ class _AddFriendDialogState extends State<AddFriendDialog> with SingleTickerProv
               indicatorColor: AppTheme.primaryColor,
               tabs: [
                 Tab(text: '搜索好友'),
+                Tab(text: '推荐好友'),
                 Tab(text: '扫码添加'),
               ],
             ),
@@ -255,6 +317,9 @@ class _AddFriendDialogState extends State<AddFriendDialog> with SingleTickerProv
                 children: [
                   // 搜索好友标签
                   _buildSearchTab(),
+
+                  // 推荐好友标签
+                  _buildRecommendedTab(),
 
                   // 扫码添加标签
                   _buildScanTab(),
@@ -299,6 +364,23 @@ class _AddFriendDialogState extends State<AddFriendDialog> with SingleTickerProv
             ],
           ),
 
+          // 性别筛选
+          SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              Text('性别筛选:', style: TextStyle(fontSize: 14)),
+              SizedBox(width: 8),
+              _buildGenderFilterChip('全部', null),
+              SizedBox(width: 4),
+              _buildGenderFilterChip('男', '男'),
+              SizedBox(width: 4),
+              _buildGenderFilterChip('女', '女'),
+              SizedBox(width: 4),
+              _buildGenderFilterChip('未知', '未知'),
+            ],
+          ),
+
           SizedBox(height: 16),
 
           // 搜索结果
@@ -330,11 +412,17 @@ class _AddFriendDialogState extends State<AddFriendDialog> with SingleTickerProv
                                 user['account']?.substring(0, 1) ?? '?')
                           : null,
                     ),
-                    title: Text(
-                      user['nickname'] ?? user['account'] ?? '未知用户',
-                      style: TextStyle(
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      ),
+                    title: Row(
+                      children: [
+                        Text(
+                          user['nickname'] ?? user['account'] ?? '未知用户',
+                          style: TextStyle(
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                        SizedBox(width: 4),
+                        _buildGenderIcon(user['gender']),
+                      ],
                     ),
                     subtitle: Text('账号: ${user['account']}'),
                     trailing: _buildUserStatusChip(user),
@@ -434,6 +522,203 @@ class _AddFriendDialogState extends State<AddFriendDialog> with SingleTickerProv
         ],
       ),
     );
+  }
+
+  // 推荐好友标签
+  Widget _buildRecommendedTab() {
+    return Padding(
+      padding: EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 性别筛选
+          Row(
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              Text('性别筛选:', style: TextStyle(fontSize: 14)),
+              SizedBox(width: 8),
+              _buildGenderFilterChip('全部', null),
+              SizedBox(width: 4),
+              _buildGenderFilterChip('男', '男'),
+              SizedBox(width: 4),
+              _buildGenderFilterChip('女', '女'),
+              SizedBox(width: 4),
+              _buildGenderFilterChip('未知', '未知'),
+            ],
+          ),
+
+          SizedBox(height: 8),
+
+          // 刷新按钮
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton.icon(
+                onPressed: _loading ? null : _loadRecommendedFriends,
+                icon: Icon(Icons.refresh, size: 16),
+                label: Text('刷新推荐'),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  minimumSize: Size(0, 0),
+                ),
+              ),
+            ],
+          ),
+
+          SizedBox(height: 8),
+
+          // 推荐好友列表
+          if (_recommendedFriends.isNotEmpty) ...[
+            Text(
+              '推荐好友 (${_recommendedFriends.length})',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            SizedBox(height: 8),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: _recommendedFriends.length,
+                itemBuilder: (context, index) {
+                  final user = _recommendedFriends[index];
+                  final isSelected = _selectedUser != null &&
+                      _selectedUser!['id'] == user['id'];
+
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundImage: user['avatar'] != null && user['avatar'].isNotEmpty
+                          ? NetworkImage(user['avatar'])
+                          : null,
+                      child: user['avatar'] == null || user['avatar'].isEmpty
+                          ? Text(user['nickname']?.substring(0, 1) ??
+                                user['account']?.substring(0, 1) ?? '?')
+                          : null,
+                    ),
+                    title: Row(
+                      children: [
+                        Text(
+                          user['nickname'] ?? user['account'] ?? '未知用户',
+                          style: TextStyle(
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                        SizedBox(width: 4),
+                        _buildGenderIcon(user['gender']),
+                      ],
+                    ),
+                    subtitle: Text('账号: ${user['account']}'),
+                    trailing: _buildUserStatusChip(user),
+                    selected: isSelected,
+                    selectedTileColor: Colors.blue.withOpacity(0.1),
+                    onTap: () {
+                      setState(() {
+                        _selectedUser = isSelected ? null : user;
+                        _sourceType = 'recommend';
+                      });
+                    },
+                  );
+                },
+              ),
+            ),
+          ] else if (_loading) ...[
+            Center(
+              child: CircularProgressIndicator(),
+            ),
+          ] else ...[
+            Center(
+              child: Text(_error ?? '暂无推荐好友'),
+            ),
+          ],
+
+          if (_selectedUser != null) ...[
+            SizedBox(height: 16),
+
+            // 验证消息
+            AppTextField(
+              controller: _messageController,
+              labelText: '验证消息',
+              hintText: '请输入验证消息',
+              maxLines: 2,
+              enabled: !_loading,
+            ),
+
+            SizedBox(height: 16),
+
+            // 添加按钮
+            AppButton(
+              onPressed: _loading || _selectedUser == null ||
+                        _selectedUser!['is_friend'] == true ||
+                        _selectedUser!['has_pending_request'] == true
+                  ? null
+                  : _addFriend,
+              text: '添加好友',
+              isLoading: _loading,
+              color: AppTheme.primaryColor,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // 性别筛选芯片
+  Widget _buildGenderFilterChip(String label, String? gender) {
+    final isSelected = _selectedGender == gender;
+
+    return FilterChip(
+      label: Text(label),
+      selected: isSelected,
+      onSelected: (selected) {
+        setState(() {
+          _selectedGender = selected ? gender : null;
+        });
+
+        // 重新加载数据
+        if (_tabController.index == 0) {
+          if (_searchController.text.isNotEmpty) {
+            _searchUsers();
+          }
+        } else if (_tabController.index == 1) {
+          _loadRecommendedFriends();
+        }
+      },
+      backgroundColor: Colors.grey.withOpacity(0.1),
+      selectedColor: AppTheme.primaryColor.withOpacity(0.2),
+      labelStyle: TextStyle(
+        color: isSelected ? AppTheme.primaryColor : null,
+        fontSize: 12,
+      ),
+      padding: EdgeInsets.zero,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+    );
+  }
+
+  // 性别图标
+  Widget _buildGenderIcon(String? gender) {
+    IconData icon;
+    Color color;
+
+    switch (gender) {
+      case '男':
+        icon = Icons.male;
+        color = Colors.blue;
+        break;
+      case '女':
+        icon = Icons.female;
+        color = Colors.pink;
+        break;
+      case '未知':
+      default:
+        icon = Icons.help_outline;
+        color = Colors.grey;
+        break;
+    }
+
+    return Icon(icon, size: 16, color: color);
   }
 
   // 用户状态标签

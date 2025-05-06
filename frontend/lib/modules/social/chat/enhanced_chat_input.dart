@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'emoji_picker.dart';
 import 'location_picker.dart';
+import 'image_picker.dart' as custom_picker;
 import '../../../common/theme.dart';
 import '../../../common/theme_manager.dart';
 import '../../../common/persistence.dart';
@@ -97,8 +98,8 @@ class _EnhancedChatInputState extends State<EnhancedChatInput> {
 
   Future<void> _pickImage() async {
     try {
-      final ImagePicker picker = ImagePicker();
-      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+      // 显示选择对话框：拍照或从相册选择
+      final XFile? image = await custom_picker.showImageSourceDialog(context);
 
       if (image != null && widget.onSendImage != null) {
         widget.onSendImage!(File(image.path), image.path);
@@ -107,6 +108,21 @@ class _EnhancedChatInputState extends State<EnhancedChatInput> {
       print('选择图片出错: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('选择图片失败: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Future<void> _takePhoto() async {
+    try {
+      final XFile? image = await custom_picker.takePhoto(context: context);
+
+      if (image != null && widget.onSendImage != null) {
+        widget.onSendImage!(File(image.path), image.path);
+      }
+    } catch (e) {
+      print('拍照出错: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('拍照失败: $e'), backgroundColor: Colors.red),
       );
     }
   }
@@ -511,7 +527,8 @@ class _EnhancedChatInputState extends State<EnhancedChatInput> {
               mainAxisSpacing: 16,
               crossAxisSpacing: 8,
               children: [
-                _buildOptionItem(Icons.photo, '图片', _pickImage),
+                _buildOptionItem(Icons.photo_library, '相册', _pickImage),
+                _buildOptionItem(Icons.camera_alt, '拍照', _takePhoto),
                 _buildOptionItem(Icons.videocam, '视频', _pickVideo),
                 _buildOptionItem(Icons.insert_drive_file, '文件', _pickFile),
                 _buildOptionItem(Icons.redeem, '红包', _showRedPacketDialog),

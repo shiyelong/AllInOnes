@@ -12,7 +12,7 @@ class UserInfo {
   final String? avatar;
   final String? email;
   final String? phone;
-  final int? gender;
+  final dynamic gender; // 可以是int或String
   final String? generatedEmail;
   final String? token; // ??token??
 

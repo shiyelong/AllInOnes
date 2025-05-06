@@ -28,5 +28,9 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSCameraUsageDescription</key>
+	<string>需要访问您的摄像头以便拍照和视频通话</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>需要访问您的麦克风以便语音和视频通话</string>
 </dict>
 </plist>

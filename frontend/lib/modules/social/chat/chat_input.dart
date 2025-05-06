@@ -69,7 +69,15 @@ class _ChatInputState extends State<ChatInput> {
   }
 
   void _pickImage() async {
-    final img = await pickImage();
+    // 显示选择对话框：拍照或从相册选择
+    final img = await showImageSourceDialog(context);
+    if (img != null && widget.onSendImage != null) {
+      widget.onSendImage!(File(img.path), img.path);
+    }
+  }
+
+  void _takePhoto() async {
+    final img = await takePhoto(context: context);
     if (img != null && widget.onSendImage != null) {
       widget.onSendImage!(File(img.path), img.path);
     }
@@ -266,7 +274,8 @@ class _ChatInputState extends State<ChatInput> {
             child: GridView.count(
               crossAxisCount: 4,
               children: [
-                _buildOptionItem(Icons.photo, '图片', _pickImage),
+                _buildOptionItem(Icons.photo, '相册', _pickImage),
+                _buildOptionItem(Icons.camera_alt, '拍照', _takePhoto),
                 _buildOptionItem(Icons.videocam, '视频', _pickVideo),
                 _buildOptionItem(Icons.insert_drive_file, '文件', _pickFile),
                 _buildOptionItem(Icons.redeem, '红包', _showRedPacketDialog),

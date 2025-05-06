@@ -13,7 +13,7 @@ import 'common/localization.dart';
 import 'common/persistence.dart';
 import 'common/platform_utils.dart';
 import 'modules/profile/settings/theme_settings_page.dart';
-import 'modules/social/call/call_manager.dart';
+import 'modules/social/chat/call/simplified/simplified_call_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,8 +46,13 @@ void main() async {
   debugPrint('是否是桌面平台: ${PlatformUtils.isDesktop}');
   debugPrint('是否是Web平台: ${PlatformUtils.isWeb}');
 
-  // 初始化通话管理器
-  await CallManager().initialize();
+  // 初始化简化版通话管理器
+  try {
+    await SimplifiedCallManager().initialize();
+    debugPrint('初始化简化版通话管理器成功');
+  } catch (e) {
+    debugPrint('初始化简化版通话管理器失败: $e');
+  }
 
   runApp(const MyApp());
 }
@@ -67,7 +72,7 @@ class _MyAppState extends State<MyApp> {
       debugShowCheckedModeBanner: false,
       theme: ThemeManager.getThemeData(),
       themeMode: ThemeMode.light, // 使用自定义主题
-      navigatorKey: navigatorKey, // 使用全局导航键，用于通话管理器
+      navigatorKey: simplifiedNavigatorKey, // 使用简化版全局导航键，用于通话管理器
       initialRoute: '/login',
       routes: {
         '/login': (context) => AutoLoginGate(child: LoginPage()),
@@ -81,6 +86,7 @@ class _MyAppState extends State<MyApp> {
           },
         ),
         '/wallet': (context) => const WalletPage(),
+        // 移除测试页面
         // 添加好友页面路由
         '/add_friend': (context) => Scaffold(
           appBar: AppBar(title: Text('添加好友')),

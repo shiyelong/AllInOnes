@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'dart:math';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'persistence.dart';
 import 'text_sanitizer.dart';
+import 'mock_api.dart';
 
 class Api {
   static const String _base = 'http://localhost:3001/api'; // 已确认正确的后端地址
@@ -814,11 +816,48 @@ class Api {
   static Future<Map<String, dynamic>> searchUsers({
     required String keyword,
     String? currentUserId,
+    String? gender,
   }) async {
-    return await _get('/friends/search', queryParams: {
-      'keyword': keyword,
-      if (currentUserId != null) 'current_user_id': currentUserId,
-    });
+    try {
+      final response = await _get('/friends/search', queryParams: {
+        'keyword': keyword,
+        if (currentUserId != null) 'current_user_id': currentUserId,
+        if (gender != null && gender.isNotEmpty) 'gender': gender,
+      });
+      return response;
+    } catch (e) {
+      debugPrint('搜索用户失败，使用模拟数据: $e');
+      // 使用模拟数据
+      return MockApi.searchUsers(
+        keyword: keyword,
+        currentUserId: currentUserId,
+        gender: gender,
+      );
+    }
+  }
+
+  // 获取推荐好友
+  static Future<Map<String, dynamic>> getRecommendedFriends({
+    String? currentUserId,
+    int limit = 10,
+    String? gender,
+  }) async {
+    try {
+      final response = await _get('/friends/recommended', queryParams: {
+        if (currentUserId != null) 'current_user_id': currentUserId,
+        'limit': limit.toString(),
+        if (gender != null && gender.isNotEmpty) 'gender': gender,
+      });
+      return response;
+    } catch (e) {
+      debugPrint('获取推荐好友失败，使用模拟数据: $e');
+      // 使用模拟数据
+      return MockApi.getRecommendedFriends(
+        currentUserId: currentUserId,
+        limit: limit,
+        gender: gender,
+      );
+    }
   }
 
   // 获取好友请求列表
@@ -1069,8 +1108,26 @@ class Api {
     // 添加文件类型
     request.fields['type'] = fileType;
 
+    // 检查文件是否存在
+    final file = File(filePath);
+    if (!await file.exists()) {
+      debugPrint('[API] 文件不存在: $filePath');
+      return {
+        'success': false,
+        'msg': '文件不存在: $filePath',
+      };
+    }
+
     // 添加文件
-    request.files.add(await http.MultipartFile.fromPath('file', filePath));
+    try {
+      request.files.add(await http.MultipartFile.fromPath('file', filePath));
+    } catch (e) {
+      debugPrint('[API] 添加文件到请求失败: $e');
+      return {
+        'success': false,
+        'msg': '添加文件到请求失败: $e',
+      };
+    }
 
     debugPrint('[API] 上传文件: $filePath, 类型: $fileType, URL: $uri');
 
@@ -1082,13 +1139,39 @@ class Api {
       debugPrint('[API] 上传文件响应状态码: ${response.statusCode}');
       debugPrint('[API] 上传文件响应数据: $responseData');
 
-      try {
-        return jsonDecode(responseData);
-      } catch (e) {
-        debugPrint('[API] 解析上传文件响应失败: $e');
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        try {
+          var jsonResponse = jsonDecode(responseData);
+
+          // 检查URL是否是相对路径，如果是，添加baseUrl前缀
+          if (jsonResponse['success'] == true &&
+              jsonResponse['data'] != null &&
+              jsonResponse['data']['url'] != null) {
+
+            String url = jsonResponse['data']['url'];
+            if (url.startsWith('/')) {
+              // 将相对路径转换为完整URL
+              jsonResponse['data']['url'] = '$baseUrl$url';
+              debugPrint('[API] 转换文件URL: $url -> ${jsonResponse['data']['url']}');
+            }
+          }
+
+          return jsonResponse;
+        } catch (e) {
+          debugPrint('[API] 解析上传文件响应失败: $e');
+          return {
+            'success': false,
+            'msg': '解析响应失败: $responseData',
+          };
+        }
+      } else {
+        debugPrint('[API] 上传文件失败，状态码: ${response.statusCode}');
         return {
           'success': false,
-          'msg': '解析响应失败: $responseData',
+          'msg': '上传文件失败，服务器返回: ${response.statusCode}',
+          'data': {
+            'url': 'file://$filePath', // 失败时返回本地路径，确保UI可以显示
+          }
         };
       }
     } catch (e) {
@@ -1096,6 +1179,9 @@ class Api {
       return {
         'success': false,
         'msg': '上传文件失败: $e',
+        'data': {
+          'url': 'file://$filePath', // 失败时返回本地路径，确保UI可以显示
+        }
       };
     }
   }

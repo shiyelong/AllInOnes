@@ -1,0 +1,4 @@
+// 禁用不支持的编译器选项
+OTHER_CFLAGS = $(inherited) -Wno-error=incompatible-sysroot
+EXCLUDED_ARCHS[sdk=iphonesimulator*] = i386
+IPHONEOS_DEPLOYMENT_TARGET = 12.0

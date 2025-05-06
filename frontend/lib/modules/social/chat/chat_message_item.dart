@@ -9,7 +9,6 @@ import 'package:http/http.dart' as http;
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../common/theme_manager.dart';
 import '../../../common/text_sanitizer.dart';
-import '../../../common/file_utils.dart';
 import '../../../common/enhanced_file_utils.dart';
 
 class ChatMessageItem extends StatefulWidget {
@@ -34,8 +33,8 @@ class _ChatMessageItemState extends State<ChatMessageItem> {
     try {
       // 检查是否是本地文件路径
       if (url.startsWith('file://') || url.startsWith('/')) {
-        final filePath = FileUtils.getValidFilePath(url);
-        return await FileUtils.fileExists(filePath);
+        final filePath = EnhancedFileUtils.getValidFilePath(url);
+        return await EnhancedFileUtils.fileExists(filePath);
       }
 
       // 如果是网络URL，尝试使用不同的缓存策略加载图片
@@ -44,7 +43,7 @@ class _ChatMessageItemState extends State<ChatMessageItem> {
           final response = await http.get(Uri.parse(url));
           if (response.statusCode == 200) {
             // 如果成功加载，保存到本地以便下次使用
-            final localPath = await FileUtils.saveImage(response.bodyBytes);
+            final localPath = await EnhancedFileUtils.downloadAndSaveImage(url);
             if (localPath.isNotEmpty) {
               // 更新消息中的图片路径
               message['content'] = localPath;
@@ -69,7 +68,7 @@ class _ChatMessageItemState extends State<ChatMessageItem> {
   Widget _getImageWidget(String imageUrl, {double? width, double? height, BoxFit fit = BoxFit.cover}) {
     // 处理本地文件路径
     if (imageUrl.startsWith('file://') || imageUrl.startsWith('/')) {
-      final filePath = FileUtils.getValidFilePath(imageUrl);
+      final filePath = EnhancedFileUtils.getValidFilePath(imageUrl);
       if (filePath.isNotEmpty) {
         return Image.file(
           File(filePath),
@@ -106,7 +105,7 @@ class _ChatMessageItemState extends State<ChatMessageItem> {
           // 如果重试成功，使用更新后的路径
           final updatedUrl = message['content'] ?? imageUrl;
           if (updatedUrl.startsWith('file://') || updatedUrl.startsWith('/')) {
-            final filePath = FileUtils.getValidFilePath(updatedUrl);
+            final filePath = EnhancedFileUtils.getValidFilePath(updatedUrl);
             if (filePath.isNotEmpty) {
               return Image.file(
                 File(filePath),
@@ -170,77 +169,118 @@ class _ChatMessageItemState extends State<ChatMessageItem> {
       return _buildImageErrorWidget(200, 150);
     }
 
+    // 获取图片ID或时间戳作为标识
+    final imageId = message['id'] ?? DateTime.now().millisecondsSinceEpoch.toString();
+
     // 检查是否是本地文件路径
     if (imagePath.startsWith('file://') || imagePath.startsWith('/')) {
-      final filePath = FileUtils.getValidFilePath(imagePath);
+      final filePath = EnhancedFileUtils.getValidFilePath(imagePath);
 
-      return Image.file(
-        File(filePath),
-        width: 200,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
-          debugPrint('本地图片加载失败: $error, 路径: $filePath');
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(4.0),
+        child: Container(
+          constraints: BoxConstraints(
+            maxWidth: 200,
+            maxHeight: 250,
+          ),
+          child: Image.file(
+            File(filePath),
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              debugPrint('本地图片加载失败: $error, 路径: $filePath');
 
-          // 尝试从原始URL重新下载
-          Future.delayed(Duration.zero, () async {
-            final originalUrl = message['original_url'];
-            if (originalUrl != null && originalUrl.isNotEmpty &&
-                (originalUrl.startsWith('http://') || originalUrl.startsWith('https://'))) {
+              // 尝试从原始URL重新下载
+              Future.delayed(Duration.zero, () async {
+                final originalUrl = message['original_url'];
+                if (originalUrl != null && originalUrl.isNotEmpty &&
+                    (originalUrl.startsWith('http://') || originalUrl.startsWith('https://'))) {
 
-              try {
-                final localPath = await FileUtils.downloadAndSaveImage(originalUrl);
-                if (localPath.isNotEmpty) {
-                  // 更新消息中的图片路径
-                  setState(() {
-                    message['content'] = localPath;
-                  });
-                  debugPrint('图片已重新下载并保存到本地: $localPath');
+                  try {
+                    final localPath = await EnhancedFileUtils.downloadAndSaveImage(originalUrl);
+                    if (localPath.isNotEmpty) {
+                      // 更新消息中的图片路径
+                      setState(() {
+                        message['content'] = localPath;
+                      });
+                      debugPrint('图片已重新下载并保存到本地: $localPath');
+                    }
+                  } catch (e) {
+                    debugPrint('重新下载图片失败: $e');
+                  }
                 }
-              } catch (e) {
-                debugPrint('重新下载图片失败: $e');
-              }
-            }
-          });
+              });
 
-          return _buildImageErrorWidget(200, 150);
-        },
+              return _buildImageErrorWidget(200, 150);
+            },
+          ),
+        ),
       );
     }
 
     // 处理网络URL
     if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
-      return CachedNetworkImage(
-        imageUrl: imagePath,
-        placeholder: (context, url) => Container(
-          width: 200,
-          height: 150,
-          color: Colors.grey[300],
-          child: Center(child: CircularProgressIndicator()),
-        ),
-        errorWidget: (context, url, error) {
-          debugPrint('网络图片加载失败: $error, URL: $url');
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(4.0),
+        child: Container(
+          constraints: BoxConstraints(
+            maxWidth: 200,
+            maxHeight: 250,
+          ),
+          child: CachedNetworkImage(
+            imageUrl: imagePath,
+            placeholder: (context, url) => Container(
+              width: 200,
+              height: 150,
+              color: Colors.grey[300],
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            errorWidget: (context, url, error) {
+              debugPrint('网络图片加载失败: $error, URL: $url');
 
-          // 尝试下载并保存图片
-          Future.delayed(Duration.zero, () async {
-            try {
-              final localPath = await FileUtils.downloadAndSaveImage(imagePath);
-              if (localPath.isNotEmpty) {
-                // 更新消息中的图片路径
-                setState(() {
-                  message['content'] = localPath;
-                  message['original_url'] = imagePath;
+              // 检查是否有服务器URL
+              final serverUrl = message['server_url'];
+              if (serverUrl != null && serverUrl.isNotEmpty &&
+                  serverUrl != url && (serverUrl.startsWith('http://') || serverUrl.startsWith('https://'))) {
+                debugPrint('尝试使用服务器URL: $serverUrl');
+
+                // 使用服务器URL重新加载
+                Future.delayed(Duration.zero, () {
+                  setState(() {
+                    message['content'] = serverUrl;
+                  });
                 });
-                debugPrint('图片已下载并保存到本地: $localPath');
-              }
-            } catch (e) {
-              debugPrint('下载图片失败: $e');
-            }
-          });
 
-          return _buildImageErrorWidget(200, 150);
-        },
-        width: 200,
-        fit: BoxFit.cover,
+                return Container(
+                  width: 200,
+                  height: 150,
+                  color: Colors.grey[300],
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+
+              // 尝试下载并保存图片
+              Future.delayed(Duration.zero, () async {
+                try {
+                  final localPath = await EnhancedFileUtils.downloadAndSaveImage(imagePath);
+                  if (localPath.isNotEmpty) {
+                    // 更新消息中的图片路径
+                    setState(() {
+                      message['content'] = localPath;
+                      message['original_url'] = imagePath;
+                      message['server_url'] = imagePath;
+                    });
+                    debugPrint('图片已下载并保存到本地: $localPath');
+                  }
+                } catch (e) {
+                  debugPrint('下载图片失败: $e');
+                }
+              });
+
+              return _buildImageErrorWidget(200, 150);
+            },
+            fit: BoxFit.cover,
+          ),
+        ),
       );
     }
 
@@ -300,7 +340,7 @@ class _ChatMessageItemState extends State<ChatMessageItem> {
                     SizedBox(height: 8),
                     Text(
                       videoUrl.startsWith('file://') || videoUrl.startsWith('/')
-                          ? '本地视频: ${FileUtils.getFileName(videoUrl)}'
+                          ? '本地视频: ${EnhancedFileUtils.getFileName(videoUrl)}'
                           : '网络视频',
                       style: TextStyle(color: Colors.white70, fontSize: 14),
                     ),
@@ -342,6 +382,7 @@ class _ChatMessageItemState extends State<ChatMessageItem> {
     switch (type) {
       case 'image':
         final imagePath = message['content'] ?? '';
+        final messageId = message['id'] ?? DateTime.now().millisecondsSinceEpoch.toString();
 
         contentWidget = GestureDetector(
           onTap: () {
@@ -351,18 +392,15 @@ class _ChatMessageItemState extends State<ChatMessageItem> {
                 MaterialPageRoute(
                   builder: (context) => ImageViewerPage(
                     imageUrl: imagePath,
-                    heroTag: 'image_${message['id'] ?? DateTime.now().millisecondsSinceEpoch}',
+                    heroTag: 'image_$messageId',
                   ),
                 ),
               );
             }
           },
           child: Hero(
-            tag: 'image_${message['id'] ?? DateTime.now().millisecondsSinceEpoch}',
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: _buildImageWidget(imagePath),
-            ),
+            tag: 'image_$messageId',
+            child: _buildImageWidget(imagePath),
           ),
         );
         break;
@@ -376,8 +414,8 @@ class _ChatMessageItemState extends State<ChatMessageItem> {
             if (videoUrl.isNotEmpty) {
               if (videoUrl.startsWith('file://') || videoUrl.startsWith('/')) {
                 // 本地视频，检查是否存在
-                final validPath = FileUtils.getValidFilePath(videoUrl);
-                if (await FileUtils.fileExists(validPath)) {
+                final validPath = EnhancedFileUtils.getValidFilePath(videoUrl);
+                if (await EnhancedFileUtils.fileExists(validPath)) {
                   // 显示视频播放器
                   _showVideoPlayer(context, validPath);
                 } else {
@@ -392,10 +430,18 @@ class _ChatMessageItemState extends State<ChatMessageItem> {
                 );
 
                 try {
-                  final result = await FileUtils.downloadAndSaveFile(videoUrl);
+                  final result = await EnhancedFileUtils.downloadAndSaveFileEnhanced(
+                    videoUrl,
+                    fileType: 'video',
+                    serverUrl: videoUrl
+                  );
                   if (result['path']!.isNotEmpty) {
                     // 更新消息中的视频路径
-                    message['content'] = result['path'];
+                    setState(() {
+                      message['content'] = result['path'];
+                      message['original_url'] = videoUrl;
+                      message['server_url'] = videoUrl;
+                    });
 
                     // 显示视频播放器
                     _showVideoPlayer(context, result['path']!);
@@ -842,6 +888,9 @@ class _ChatMessageItemState extends State<ChatMessageItem> {
       );
     }
 
+    // 图片消息特殊处理
+    final bool isImageMessage = type == 'image';
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(
@@ -884,13 +933,25 @@ class _ChatMessageItemState extends State<ChatMessageItem> {
                   // 消息气泡
                   Container(
                     constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.6),
-                    padding: EdgeInsets.all(type == 'emoji' ? 0 : 12),
+                    padding: isImageMessage ? EdgeInsets.zero : EdgeInsets.all(type == 'emoji' ? 0 : 12),
                     decoration: BoxDecoration(
-                      color: bubbleColor,
+                      color: isImageMessage ? Colors.transparent : bubbleColor,
                       borderRadius: bubbleRadius,
                     ),
                     child: contentWidget,
                   ),
+                  // 消息ID或时间戳 (仅图片消息显示)
+                  if (isImageMessage)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4, right: 4, left: 4),
+                      child: Text(
+                        message['id'] != null ? message['id'].toString() : '',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[500],
+                        ),
+                      ),
+                    ),
                   // 消息状态
                   if (isMe)
                     Padding(

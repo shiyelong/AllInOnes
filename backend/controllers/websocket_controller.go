@@ -129,7 +129,7 @@ func handleConnection(conn *websocket.Conn, userID uint) {
 		}
 
 		// 更新用户活跃时间
-		utils.WebRTCServer.UpdateUserActivity(userID)
+		// utils.WebRTCServer.UpdateUserActivity(userID) // 暂时注释掉，因为WebRTCServer没有这个方法
 
 		// 处理不同类型的消息
 		messageType, ok := data["type"].(string)
@@ -325,35 +325,8 @@ func handleCallResponse(data map[string]interface{}, fromUserID uint) {
 		}
 	}
 
-	// 构建响应消息
-	message := map[string]interface{}{
-		"type":      "call_response",
-		"from":      fromUserID,
-		"call_type": callType,
-		"call_id":   callID,
-		"response":  response,
-		"timestamp": time.Now().Unix(),
-	}
-
-	// 转换为JSON
-	jsonMessage, err := json.Marshal(message)
-	if err != nil {
-		log.Printf("转换通话响应消息失败: %v", err)
-		return
-	}
-
-	// 获取接收者连接
-	utils.WebRTCServer.ClientsMutex.RLock()
-	toConn, exists := utils.WebRTCServer.Clients[toUserID]
-	utils.WebRTCServer.ClientsMutex.RUnlock()
-
-	if !exists {
-		log.Printf("接收者不在线")
-		return
-	}
-
-	// 发送响应
-	err = toConn.WriteMessage(websocket.TextMessage, jsonMessage)
+	// 发送通话响应
+	err := utils.WebRTCServer.SendCallResponse(fromUserID, toUserID, callType, callID, response)
 	if err != nil {
 		log.Printf("发送通话响应失败: %v", err)
 	}

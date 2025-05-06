@@ -22,14 +22,16 @@ func SetupRouter() *gin.Engine {
 	config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization"}
 	r.Use(cors.New(config))
 
-	// 静态文件服务（上传文件可通过 /static/xxx 访问）
+	// 静态文件服务（上传文件可通过 /uploads/xxx 访问）
+	r.Static("/uploads", "./uploads")
+
+	// 保留旧的静态文件路径，兼容旧代码
 	r.Static("/static", "./uploads")
 
 	// 注册用户路由（包含登录注册等公共API）
 	routes.RegisterUserRoutes(r)
 
-	// 注册新的用户路由（包含新的登录注册API）
-	// routes.RegisterNewUserRoutes(r) // 暂时注释掉，避免路由冲突
+	// 注册新的用户路由已合并到RegisterUserRoutes
 
 	// API分组
 	api := r.Group("/api")
@@ -57,9 +59,6 @@ func SetupRouter() *gin.Engine {
 
 		// 好友相关
 		routes.RegisterFriendsRoutes(auth)
-
-		// 红包相关
-		routes.RegisterHongbaoRoutes(auth)
 
 		// 视频通话相关
 		routes.RegisterWebRTCRoutes(auth)

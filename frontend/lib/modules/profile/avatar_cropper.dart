@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:image_cropper/image_cropper.dart';
+// import 'package:image_cropper/image_cropper.dart'; // 暂时禁用
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
@@ -99,75 +99,22 @@ class _AvatarCropperState extends State<AvatarCropper> {
     }
   }
 
+  // 暂时禁用裁剪功能，直接返回原始图片
   Future<File?> _cropImage(File imageFile) async {
-    final theme = ThemeManager.currentTheme;
-
+    // 创建最终文件
     try {
-      final croppedFile = await ImageCropper().cropImage(
-        sourcePath: imageFile.path,
-        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
-        uiSettings: [
-          AndroidUiSettings(
-            toolbarTitle: '裁剪头像',
-            toolbarColor: theme.primaryColor,
-            toolbarWidgetColor: Colors.white,
-            initAspectRatio: CropAspectRatioPreset.square,
-            lockAspectRatio: true,
-            hideBottomControls: false,
-            statusBarColor: theme.primaryColor,
-          ),
-          IOSUiSettings(
-            title: '裁剪头像',
-            doneButtonTitle: '完成',
-            cancelButtonTitle: '取消',
-            aspectRatioLockEnabled: true,
-            minimumAspectRatio: 1.0,
-            aspectRatioPickerButtonHidden: true,
-          ),
-          WebUiSettings(
-            context: context,
-            presentStyle: CropperPresentStyle.dialog,
-            boundary: const CroppieBoundary(
-              width: 400,
-              height: 400,
-            ),
-            viewPort: const CroppieViewPort(
-              width: 300,
-              height: 300,
-              type: 'circle',
-            ),
-            enableExif: true,
-            enableZoom: true,
-            showZoomer: true,
-          ),
-        ],
-        compressQuality: 90,
-        maxWidth: 512,
-        maxHeight: 512,
-      );
-
-      if (croppedFile == null) {
-        return null;
-      }
-
-      // 创建最终文件
       final tempDir = await getTemporaryDirectory();
-      final targetPath = path.join(tempDir.path, 'cropped_avatar_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      final targetPath = path.join(tempDir.path, 'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg');
       final targetFile = File(targetPath);
 
-      // 复制裁剪后的文件
-      if (Platform.isAndroid || Platform.isIOS) {
-        await File(croppedFile.path).copy(targetPath);
-      } else {
-        // Web平台处理
-        await targetFile.writeAsBytes(await croppedFile.readAsBytes());
-      }
+      // 复制原始文件
+      await imageFile.copy(targetPath);
 
       return targetFile;
     } catch (e) {
-      debugPrint('裁剪图片失败: $e');
+      debugPrint('处理图片失败: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('裁剪图片失败: $e')),
+        SnackBar(content: Text('处理图片失败: $e')),
       );
       return null;
     }

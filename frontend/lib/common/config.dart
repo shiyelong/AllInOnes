@@ -12,7 +12,7 @@ class Config {
   static const String avatarUrlPrefix = '$baseUrl/avatar';
 
   // 文件URL前缀
-  static const String fileUrlPrefix = '$baseUrl/file';
+  static const String fileUrlPrefix = 'http://localhost:3001/uploads';
 
   // 应用名称
   static const String appName = 'AllInOne';

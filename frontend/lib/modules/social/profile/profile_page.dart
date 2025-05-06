@@ -185,6 +185,114 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
+  // 显示性别选择对话框
+  void _showGenderSelectionDialog() {
+    dynamic selectedGender = _userInfo?.gender;
+    // 将字符串类型转换为数字类型
+    if (selectedGender is String) {
+      if (selectedGender == '男') {
+        selectedGender = 1;
+      } else if (selectedGender == '女') {
+        selectedGender = 2;
+      } else {
+        selectedGender = 0;
+      }
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('选择性别'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(Icons.male, color: Colors.blue),
+              title: Text('男'),
+              selected: selectedGender == 1 || selectedGender == '男',
+              onTap: () {
+                Navigator.pop(context);
+                _updateUserInfo({'gender': 1});
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.female, color: Colors.pink),
+              title: Text('女'),
+              selected: selectedGender == 2 || selectedGender == '女',
+              onTap: () {
+                Navigator.pop(context);
+                _updateUserInfo({'gender': 2});
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.help_outline, color: Colors.grey),
+              title: Text('未知'),
+              selected: selectedGender == 0 || selectedGender == '未知' || selectedGender == null,
+              onTap: () {
+                Navigator.pop(context);
+                _updateUserInfo({'gender': 0});
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('取消'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 构建性别图标
+  Widget _buildGenderIcon(dynamic gender) {
+    IconData icon;
+    Color color;
+
+    // 处理字符串类型
+    if (gender is String) {
+      switch (gender) {
+        case '男':
+          icon = Icons.male;
+          color = Colors.blue;
+          break;
+        case '女':
+          icon = Icons.female;
+          color = Colors.pink;
+          break;
+        default:
+          icon = Icons.help_outline;
+          color = Colors.grey;
+          break;
+      }
+    }
+    // 处理数字类型
+    else if (gender is int) {
+      switch (gender) {
+        case 1: // 男
+          icon = Icons.male;
+          color = Colors.blue;
+          break;
+        case 2: // 女
+          icon = Icons.female;
+          color = Colors.pink;
+          break;
+        default:
+          icon = Icons.help_outline;
+          color = Colors.grey;
+          break;
+      }
+    }
+    // 默认情况
+    else {
+      icon = Icons.help_outline;
+      color = Colors.grey;
+    }
+
+    return Icon(icon, size: 16, color: color);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -231,7 +339,25 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                 ),
                 SizedBox(height: 8),
-                Text('账号: ${_userInfo?.account ?? '未知'}', style: TextStyle(color: Colors.grey)),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('账号: ${_userInfo?.account ?? '未知'}', style: TextStyle(color: Colors.grey)),
+                    SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: () {
+                        _showGenderSelectionDialog();
+                      },
+                      child: Row(
+                        children: [
+                          _buildGenderIcon(_userInfo?.gender),
+                          SizedBox(width: 4),
+                          Icon(Icons.edit, size: 12, color: Colors.grey),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
                 if (_userInfo?.generatedEmail != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 4.0),

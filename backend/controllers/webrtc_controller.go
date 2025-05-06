@@ -161,7 +161,12 @@ func StartVideoCallWebRTC(c *gin.Context) {
 		return
 	}
 
-	// TODO: 通过WebSocket通知接收者有视频通话请求
+	// 通过WebSocket通知接收者有视频通话请求
+	err := utils.WebRTCServer.SendCallInvitation(userID.(uint), req.ReceiverID, "video", videoCall.ID)
+	if err != nil {
+		utils.Logger.Errorf("发送视频通话邀请失败: %v", err)
+		// 通知失败不影响API响应
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -218,7 +223,19 @@ func EndVideoCallWebRTC(c *gin.Context) {
 		return
 	}
 
-	// TODO: 通过WebSocket通知对方通话已结束
+	// 通过WebSocket通知对方通话已结束
+	var otherUserID uint
+	if videoCall.CallerID == userID.(uint) {
+		otherUserID = videoCall.ReceiverID
+	} else {
+		otherUserID = videoCall.CallerID
+	}
+
+	err := utils.WebRTCServer.SendCallEnded(userID.(uint), otherUserID, "video", videoCall.ID, "normal")
+	if err != nil {
+		utils.Logger.Errorf("发送视频通话结束通知失败: %v", err)
+		// 通知失败不影响API响应
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -275,7 +292,12 @@ func RejectVideoCallWebRTC(c *gin.Context) {
 		return
 	}
 
-	// TODO: 通过WebSocket通知发起者通话已被拒绝
+	// 通过WebSocket通知发起者通话已被拒绝
+	err := utils.WebRTCServer.SendCallResponse(userID.(uint), videoCall.CallerID, "video", videoCall.ID, "rejected")
+	if err != nil {
+		utils.Logger.Errorf("发送视频通话拒绝通知失败: %v", err)
+		// 通知失败不影响API响应
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -335,7 +357,12 @@ func StartVoiceCallWebRTC(c *gin.Context) {
 		return
 	}
 
-	// TODO: 通过WebSocket通知接收者有语音通话请求
+	// 通过WebSocket通知接收者有语音通话请求
+	err := utils.WebRTCServer.SendCallInvitation(userID.(uint), req.ReceiverID, "voice", voiceCall.ID)
+	if err != nil {
+		utils.Logger.Errorf("发送语音通话邀请失败: %v", err)
+		// 通知失败不影响API响应
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -392,7 +419,19 @@ func EndVoiceCallWebRTC(c *gin.Context) {
 		return
 	}
 
-	// TODO: 通过WebSocket通知对方通话已结束
+	// 通过WebSocket通知对方通话已结束
+	var otherUserID uint
+	if voiceCall.CallerID == userID.(uint) {
+		otherUserID = voiceCall.ReceiverID
+	} else {
+		otherUserID = voiceCall.CallerID
+	}
+
+	err := utils.WebRTCServer.SendCallEnded(userID.(uint), otherUserID, "voice", voiceCall.ID, "normal")
+	if err != nil {
+		utils.Logger.Errorf("发送语音通话结束通知失败: %v", err)
+		// 通知失败不影响API响应
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -449,7 +488,12 @@ func RejectVoiceCallWebRTC(c *gin.Context) {
 		return
 	}
 
-	// TODO: 通过WebSocket通知发起者通话已被拒绝
+	// 通过WebSocket通知发起者通话已被拒绝
+	err := utils.WebRTCServer.SendCallResponse(userID.(uint), voiceCall.CallerID, "voice", voiceCall.ID, "rejected")
+	if err != nil {
+		utils.Logger.Errorf("发送语音通话拒绝通知失败: %v", err)
+		// 通知失败不影响API响应
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

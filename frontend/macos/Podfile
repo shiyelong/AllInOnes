@@ -1,4 +1,4 @@
-platform :osx, '10.14'
+platform :osx, '10.15'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -38,5 +38,69 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_macos_build_settings(target)
+
+    # 修复 WebRTC 和其他库的部署目标版本问题
+    target.build_configurations.each do |config|
+      config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '10.15'
+
+      # 移除不支持的编译选项
+      if target.name == 'WebRTC-SDK'
+        # 完全替换 OTHER_CFLAGS 而不是修改它
+        config.build_settings['OTHER_CFLAGS'] = []
+        config.build_settings['OTHER_LDFLAGS'] = ['$(inherited)']
+        config.build_settings['CLANG_WARN_DOCUMENTATION_COMMENTS'] = 'NO'
+        config.build_settings['CLANG_WARN_STRICT_PROTOTYPES'] = 'NO'
+        config.build_settings['CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS'] = 'NO'
+        config.build_settings['GCC_WARN_ABOUT_DEPRECATED_FUNCTIONS'] = 'NO'
+
+        # 确保使用正确的架构
+        config.build_settings['VALID_ARCHS'] = 'arm64 x86_64'
+        config.build_settings['EXCLUDED_ARCHS'] = ''
+
+        # 禁用所有可能导致问题的警告
+        config.build_settings['GCC_WARN_INHIBIT_ALL_WARNINGS'] = 'YES'
+        config.build_settings['CLANG_WARN_DOCUMENTATION_COMMENTS'] = 'NO'
+      end
+
+      # 修复 Flutter WebRTC 插件的问题
+      if target.name == 'flutter_webrtc'
+        config.build_settings['CLANG_WARN_DOCUMENTATION_COMMENTS'] = 'NO'
+        config.build_settings['CLANG_WARN_STRICT_PROTOTYPES'] = 'NO'
+        config.build_settings['CLANG_WARN_NULLABLE_TO_NONNULL_CONVERSION'] = 'NO'
+        config.build_settings['GCC_WARN_ABOUT_DEPRECATED_FUNCTIONS'] = 'NO'
+      end
+
+      # 完全禁用 BoringSSL-GRPC 的编译
+      if target.name == 'BoringSSL-GRPC'
+        target.build_configurations.each do |config|
+          # 禁用编译
+          config.build_settings['EXCLUDED_ARCHS'] = 'arm64 x86_64'
+        end
+      end
+
+      # 完全禁用 gRPC-Core 的编译
+      if target.name == 'gRPC-Core'
+        target.build_configurations.each do |config|
+          # 禁用编译
+          config.build_settings['EXCLUDED_ARCHS'] = 'arm64 x86_64'
+        end
+      end
+
+      # 完全禁用 gRPC-C++ 的编译
+      if target.name == 'gRPC-C++'
+        target.build_configurations.each do |config|
+          # 禁用编译
+          config.build_settings['EXCLUDED_ARCHS'] = 'arm64 x86_64'
+        end
+      end
+
+      # 完全禁用 abseil 的编译
+      if target.name == 'abseil'
+        target.build_configurations.each do |config|
+          # 禁用编译
+          config.build_settings['EXCLUDED_ARCHS'] = 'arm64 x86_64'
+        end
+      end
+    end
   end
 end

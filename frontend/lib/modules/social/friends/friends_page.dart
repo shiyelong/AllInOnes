@@ -166,6 +166,30 @@ class _FriendsPageState extends State<FriendsPage> {
     return _buildFriendsList();
   }
 
+  // 性别图标
+  Widget _buildGenderIcon(String? gender) {
+    IconData icon;
+    Color color;
+
+    switch (gender) {
+      case '男':
+        icon = Icons.male;
+        color = Colors.blue;
+        break;
+      case '女':
+        icon = Icons.female;
+        color = Colors.pink;
+        break;
+      case '未知':
+      default:
+        icon = Icons.help_outline;
+        color = Colors.grey;
+        break;
+    }
+
+    return Icon(icon, size: 16, color: color);
+  }
+
   // 构建好友列表
   Widget _buildFriendsList({Function(Map<String, dynamic>)? onFriendSelected}) {
     if (_loading) {
@@ -465,12 +489,18 @@ class _FriendsPageState extends State<FriendsPage> {
                   size: 40,
                   imageUrl: friendData['avatar'],
                 ),
-                title: Text(
-                  friendData['nickname'],
-                  style: TextStyle(
-                    color: isBlocked ? Colors.grey : null,
-                    decoration: isBlocked ? TextDecoration.lineThrough : null,
-                  ),
+                title: Row(
+                  children: [
+                    Text(
+                      friendData['nickname'],
+                      style: TextStyle(
+                        color: isBlocked ? Colors.grey : null,
+                        decoration: isBlocked ? TextDecoration.lineThrough : null,
+                      ),
+                    ),
+                    SizedBox(width: 4),
+                    _buildGenderIcon(friend['gender']),
+                  ],
                 ),
                 subtitle: Text(
                   '账号: ${friend['account'] ?? friend['friend_id']}',
