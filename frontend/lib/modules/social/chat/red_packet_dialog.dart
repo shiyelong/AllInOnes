@@ -112,10 +112,8 @@ class _RedPacketDialogState extends State<RedPacketDialog> {
         // 使用钱包发红包
         debugPrint('[RedPacket] 发送红包: 发送者=${userInfo.id}, 接收者=${widget.receiverId}, 金额=$amount, 数量=$count');
       final resp = await Api.sendRedPacketWithWallet(
-          senderID: userInfo.id.toString(),
-          receiverID: widget.receiverId.toString(),
+          targetId: widget.receiverId.toString(),
           amount: amount,
-          count: count,
           greeting: greeting,
         );
       debugPrint('[RedPacket] 发送红包响应: $resp');

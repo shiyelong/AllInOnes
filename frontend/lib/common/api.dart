@@ -1,35 +1,35 @@
 import 'dart:convert';
-import 'dart:math';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as p;
 import 'persistence.dart';
 import 'text_sanitizer.dart';
-import 'mock_api.dart';
 
+/// API工具类
+/// 用于与后端API交互
 class Api {
-  static const String _base = 'http://localhost:3001/api'; // 已确认正确的后端地址
-  static const String baseUrl = 'http://localhost:3001'; // 基础URL，用于构建完整的资源URL
+  // 基础URL
+  static const String _base = 'http://localhost:3001/api';
+  static const String baseUrl = 'http://localhost:3001';
 
-  // 公共方法
-  static Future<Map<String, dynamic>> get(String path, {Map<String, dynamic>? queryParams}) async {
-    return await _get(path, queryParams: queryParams);
+  /// 获取完整的资源URL
+  static String getFullUrl(String url) {
+    if (url.isEmpty) return url;
+
+    // 如果已经是完整URL，直接返回
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+
+    // 如果是相对路径，添加baseUrl前缀
+    if (url.startsWith('/')) {
+      return '$baseUrl$url';
+    }
+
+    // 其他情况，添加baseUrl和/前缀
+    return '$baseUrl/$url';
   }
-
-  static Future<Map<String, dynamic>> post(String path, {Map<String, dynamic>? data}) async {
-    return await _post(path, data: data);
-  }
-
-  static Future<Map<String, dynamic>> put(String path, {Map<String, dynamic>? data}) async {
-    return await _put(path, data: data);
-  }
-
-  static Future<Map<String, dynamic>> delete(String path) async {
-    return await _delete(path);
-  }
-
-  // 是否使用模拟数据（在后端不可用时）
-  static bool _useMock = false; // 始终使用真实API，不使用模拟数据
 
   // 获取带有认证的请求头
   static Map<String, String> _getAuthHeaders() {
@@ -135,14 +135,18 @@ class Api {
   }
 
   // 通用DELETE请求
-  static Future<Map<String, dynamic>> _delete(String path) async {
+  static Future<Map<String, dynamic>> _delete(String path, {Map<String, dynamic>? data}) async {
     final headers = _getAuthHeaders();
     final uri = Uri.parse('$_base$path');
 
-    debugPrint('[API] 发送DELETE请求: $uri');
+    debugPrint('[API] 发送DELETE请求: $uri, 数据: $data');
 
     try {
-      final resp = await http.delete(uri, headers: headers);
+      final resp = await http.delete(
+        uri,
+        headers: headers,
+        body: data != null ? jsonEncode(data) : null,
+      );
       return _handleResponse(resp);
     } catch (e) {
       debugPrint('[API] DELETE请求失败: $path, 错误: $e');
@@ -220,7 +224,52 @@ class Api {
     }
   }
 
-  // 验证Token
+  // 上传文件
+  static Future<Map<String, dynamic>> _uploadFile(String path, String filePath, String field, {Map<String, String>? fields}) async {
+    try {
+      // 构建URL
+      final uri = Uri.parse('$_base$path');
+
+      // 创建multipart请求
+      final request = http.MultipartRequest('POST', uri);
+
+      // 添加认证头
+      final headers = _getAuthHeaders();
+      request.headers.addAll(headers);
+
+      // 添加文件
+      final file = File(filePath);
+      final fileStream = http.ByteStream(file.openRead());
+      final fileLength = await file.length();
+
+      final multipartFile = http.MultipartFile(
+        field,
+        fileStream,
+        fileLength,
+        filename: p.basename(filePath),
+      );
+
+      request.files.add(multipartFile);
+
+      // 添加其他字段
+      if (fields != null) {
+        request.fields.addAll(fields);
+      }
+
+      // 发送请求
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      return _handleResponse(response);
+    } catch (e) {
+      return {
+        'success': false,
+        'msg': '上传文件失败: $e',
+      };
+    }
+  }
+
+  /// 验证Token
   static Future<Map<String, dynamic>> validateToken(String token) async {
     try {
       debugPrint('[API] 验证token: $token');
@@ -234,315 +283,676 @@ class Api {
     }
   }
 
-  // 获取验证码图片
-  static Future<Map<String, dynamic>> getCaptcha() async {
-    try {
-      debugPrint('正在请求真实验证码...');
-      final resp = await _get('/captcha');
-      if (resp['success'] == true && resp['data'] != null) {
-        debugPrint('成功获取真实验证码');
-        return resp;
-      } else {
-        debugPrint('验证码API返回错误: ${resp['msg']}');
-      }
-    } catch (e) {
-      debugPrint('获取验证码失败: $e');
-    }
-
-    // 如果API调用失败，使用一个明显的错误图片，提示用户刷新
-    debugPrint('使用错误提示验证码');
-
-    // 这是一个简单的红色图片，表示验证码加载失败
-    const base64Image = 'iVBORw0KGgoAAAANSUhEUgAAAGQAAAAoCAYAAAAIeF9DAAABhGlDQ1BJQ0MgcHJvZmlsZQAAKJF9kT1Iw0AcxV9TpSIVQTuIOGSoThZERRy1CkWoEGqFVh1MbvqhNGlIUlwcBdeCgx+LVQcXZ10dXAVB8APE1cVJ0UVK/F9SaBHjwXE/3t173L0DhGaVqWbPOKBqlpFOxMVcflUMvCKIEEIYQkRipp7MLGbhOb7u4ePrXZRneZ/7cwwoBZMBPpF4jumGRbxBPLNp6Zz3iSOsJCnE58QTBl2Q+JHrsstvnEsOCzwzYmbSPHGEWCx1sNzBrGSoxFPEUUXVKF/Iuaxw3uKsVuusfU/+wlBBW8lwneYIElhCEimIkFFHBVVYiNGqkWIiTftxD/+I40+RSyZXBYwcC6hBheT4wf/gd7dmcWrSTQrFgcCLbX+MAoFdoNWw7e9j226dAP5n4Err+GtNIP5JeqOjRY+AgW3g4rqjKXvA5Q4w9KRLhuRIfppCsQi8n9E35YHBW6B/ze2tvY/TByBLXaVvgINDYKxE2ese7+7t7u3fM+3+fgDIPnLGGCMM4gAAAAlwSFlzAAAuIwAALiMBeKU/dgAAAAd0SU1FB+gGBgwAB3UvnZAAAAQrSURBVGje7ZpfiFVVFMZ/Z8YZx3Qcx3+TI5mWGRWRkWUPRZTVQ5EPFT1EPQSCD0EPFUXRWxG9VBBREEhBD0L0UA9FEkSRZQUZGYEWGYmZmv0zY47jzNx7e/iuHO+9njvn3Ln33BnmfnDYZ5+z9tprfWd/e6+1z4EaNWrUqFGjRo0aNWrUqFGjRo0aNWrUqFGjRo0aNWrUqFGjRo0aNf4HaEh5/3bgIWADsBZYDiwFFgHzgQZgGBgAzgLHgIPAXuAQ8G+VfW8DHgXuAe4EVgFLgEXAPGAIGATOACeAI8A+4Avgz1nqQwuwCdgMrAeWAW3AQqAJGAMuAX3ACeA74HPgK+DvuA1nEsgdwLPAE8Ct5Ae5/wB7gLeB3RXyvRF4HtgK3JzTxijwKfAG8G0V+tAKPAO8CNyW08YY8BnwGvBDkgZTCaQReAV4GVicxXgKnAfeA14HLpTZ9y3Aa8BTQGMFbV0A3gVeBf4ok+/NwA5gSwVtXQTeB14BzqW9KY1AWoAPgAcrdbYA+4HHgZ9L6Pd24GPg/hTtzAEWAO0SZLNEPVfCGwF+A/qBP1L6fQDYCaxJ0c5cYCHQIWG2SJRzJLxRtRPV/lSKNvcBjwA/JjWQJJAm4BPgoZQdKIVh4Clgd0y/24DPgDUp2miWz3OBuUAj0Kx+NUhMDcA8/W4Rg8AZYCjGdg/wELArpQ9JGAGeBj6NczZOIHOAj4BHK+B8KewBHo7w/VbgC2BFQr1WYIGEMVeiWKArfxHQqt/tQIf+7wSWA8v1u0uimQtcBs4B54GLEuJZ4JQqsUvAJeBXYAD4WX+PJPi+B3ggRSWYhH3Ag8DVKIG0AB8DD1TB+VIYBDYCx0J9Xwx8C6xOoNMO3KQS1SURdKnvXRJBp0TRJVEs0nWLRDRfYmqWuJoktCaJrEnlcVjl8pKE1CcxnQbOSFxnJLbTwM/AiZj+7wc2AHsrEMgPwEbgSpRAWiWOzVVyvhRGVLaOhPq9BfgyRr9Tg3qHBt8uDfYuDfYlGvxLNOiXatAv06BfrkG/QoN+pQZ9h0Q0XyJqkYhaJaI2iahDIuqUiLr1v0fX3RLcYuCKRHZSIjspkZ2QyI5LZMdUdgdD/u8D7gO+rlAgR1W2rkUJZDvwXBUdL4VrwN3A4cD1JpWYdTF6K4A7NeBXasCv1IBfpQG/WgN+jQb8Wg34dRrw6zXgN2jAb9SA36QBv1kDfosG/FYN+G0a8Ns14Hdq0PdIZMsksj6J7JhEdlQiOyKRHZbIDklkByWyA4HnfKdS9k2VBLJbZWs4SiCvAs9X2flS2Aa8Fbh+B/g+Qm+lBvwaDfh1GvDrNeA3aMBv1IDfpAG/WQN+iwb8Vg34bRrwOzTgd2rA79KA360Bv0cDfq8G/D4N+P0a8Ac04A9qwB/SgD+sAX9EA/6oBvyxwHMOAm9W0f9vVLauRwlkZ8yAqDa2A+8E/v4uxu7OGfLrBvYHrn+cYdvXgb8A/gOOBbwz1XQrbQAAAABJRU5ErkJggg==';
-
-    return {
-      'success': true,
-      'data': {
-        'captcha_id': 'error_captcha_id_${DateTime.now().millisecondsSinceEpoch}',
-        'captcha_image': base64Image,
-      }
-    };
-  }
-
-  // 旧的注册方法（保留兼容）
-  static Future<Map<String, dynamic>> register({
-    required String account,
-    required String password,
-    required String captchaId,
-    required String captchaValue,
-  }) async {
-    return await _post('/register', data: {
-      'account': account,
-      'password': password,
-      'captcha_id': captchaId,
-      'captcha_value': captchaValue,
-    });
-  }
-
-  // 新的注册方法（支持手机号和邮箱）
-  static Future<Map<String, dynamic>> registerNew({
-    String? email,
-    String? phone,
-    required String password,
-    required String captchaId,
-    required String captchaValue,
-    required String verificationCode, // 手机/邮箱验证码
-    required String registerType, // "email" 或 "phone"
-    String? nickname, // 昵称（可选）
-  }) async {
-    try {
-      debugPrint('发送真实注册请求: $registerType, ${registerType == "email" ? email : phone}');
-      final resp = await _post('/register/new', data: {
-        'email': email,
-        'phone': phone,
-        'password': password,
-        'captcha_id': captchaId,
-        'captcha_value': captchaValue,
-        'verification_code': verificationCode, // 添加手机/邮箱验证码
-        'register_type': registerType,
-        'nickname': nickname, // 添加昵称
-      });
-
-      debugPrint('注册响应: $resp');
-      return resp; // 始终返回真实响应，无论成功与否
-    } catch (e) {
-      debugPrint('注册请求异常: $e');
-      // 返回错误信息
-      return {
-        'success': false,
-        'msg': '网络异常，请稍后重试',
-      };
-    }
-  }
-
-  // 检查邮箱/手机号是否已注册
-  static Future<Map<String, dynamic>> checkExists({
-    required String type, // "email" 或 "phone"
-    required String target, // 邮箱或手机号
-  }) async {
-    try {
-      debugPrint('检查是否已注册: $type, $target');
-
-      final resp = await _post('/register/check', data: {
-        'type': type,
-        'target': target,
-      });
-
-      return resp;
-    } catch (e) {
-      debugPrint('检查是否已注册请求异常: $e');
-      return {
-        'success': false,
-        'msg': '检查失败，请检查网络连接',
-        'data': {'exists': false}, // 默认返回不存在，避免阻止用户继续
-      };
-    }
-  }
-
-  // 获取验证码
-  static Future<Map<String, dynamic>> getVerificationCode({
-    required String type, // "email" 或 "phone"
-    required String target, // 邮箱或手机号
-  }) async {
-    try {
-      debugPrint('正在请求发送真实验证码: $type, $target');
-
-      // 首先检查是否已注册
-      final checkResp = await checkExists(type: type, target: target);
-      if (checkResp['success'] == true && checkResp['data']['exists'] == true) {
-        debugPrint('$type $target 已被注册，无法发送验证码');
-        return {
-          'success': false,
-          'msg': type == 'email' ? '该邮箱已被注册' : '该手机号已被注册',
-        };
-      }
-
-      // 根据类型选择不同的API路径
-      String apiPath = type == "phone" ? '/register/sms' : '/register/code';
-
-      final resp = await _get(apiPath, queryParams: {
-        'type': type,
-        'target': target,
-        'phone': type == "phone" ? target : null,
-      });
-
-      if (resp['success'] == true) {
-        debugPrint('验证码发送成功');
-        return resp;
-      } else {
-        debugPrint('验证码发送失败: ${resp['msg']}');
-      }
-    } catch (e) {
-      debugPrint('发送验证码请求异常: $e');
-    }
-
-    // 如果API调用失败，返回错误信息
-    debugPrint('验证码发送失败，返回错误信息');
-
-    return {
-      'success': false,
-      'msg': '验证码发送失败，请检查网络连接或联系管理员',
-    };
-  }
-
-  // 获取短信验证码（用户自己发送短信到运营商）
-  static Future<Map<String, dynamic>> getSMSVerificationCode({
-    required String phone, // 手机号
-  }) async {
-    try {
-      debugPrint('正在请求短信验证码信息: $phone');
-      final resp = await _get('/register/sms', queryParams: {
-        'phone': phone,
-      });
-
-      if (resp['success'] == true) {
-        debugPrint('短信验证码信息获取成功');
-        return resp;
-      } else {
-        debugPrint('短信验证码信息获取失败: ${resp['msg']}');
-      }
-    } catch (e) {
-      debugPrint('获取短信验证码信息异常: $e');
-    }
-
-    // 如果API调用失败，返回错误信息
-    return {
-      'success': false,
-      'msg': '获取短信验证码信息失败，请检查网络连接或联系管理员',
-    };
-  }
-
-  // 旧的登录方法（保留兼容）
+  /// 登录
   static Future<Map<String, dynamic>> login({
     required String account,
     required String password,
   }) async {
-    return await _post('/login', data: {
+    return await _post('/auth/login', data: {
       'account': account,
       'password': password,
     });
   }
 
-  // 新的登录方法（支持账号、手机号和邮箱）
+  /// 登录（兼容旧版本）
   static Future<Map<String, dynamic>> loginNew({
     required String account,
     required String password,
   }) async {
-    // 判断登录类型：账号、手机号或邮箱
-    String loginType = 'account';
-
-    // 检查是否是手机号（简单判断：11位数字，以1开头）
-    if (RegExp(r'^1\d{10}$').hasMatch(account)) {
-      loginType = 'phone';
-    }
-    // 检查是否是邮箱
-    else if (RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(account)) {
-      loginType = 'email';
-    }
-
-    // 使用新的登录API路径
-    try {
-      debugPrint('[Login] 尝试使用新登录API: /login/new');
-      return await _post('/login/new', data: {
-        'account': account,
-        'password': password,
-        'login_type': loginType, // 新API支持login_type参数
-      });
-    } catch (e) {
-      debugPrint('[Login] 新登录API失败，尝试旧API: $e');
-      try {
-        // 尝试使用旧的登录API作为备选
-        return await _post('/login', data: {
-          'account': account,
-          'password': password,
-        });
-      } catch (e2) {
-        debugPrint('[Login] 登录失败: $e2');
-        return {
-          'success': false,
-          'msg': '登录失败，请检查账号密码',
-        };
-      }
-    }
+    return await login(account: account, password: password);
   }
 
-  // 获取用户信息
-  static Future<Map<String, dynamic>> getUserInfo({String? userId}) async {
-    if (userId != null) {
-      return await _get('/user/$userId');
-    } else {
-      return await _get('/user/info');
-    }
+  /// 注册
+  static Future<Map<String, dynamic>> register({
+    required String account,
+    required String password,
+    required String nickname,
+    required String verificationCode,
+  }) async {
+    return await _post('/auth/register', data: {
+      'account': account,
+      'password': password,
+      'nickname': nickname,
+      'verification_code': verificationCode,
+    });
   }
 
-  // 根据ID获取用户信息
+  /// 注册（兼容旧版本）
+  static Future<Map<String, dynamic>> registerNew({
+    required String account,
+    required String password,
+    required String nickname,
+    required String verificationCode,
+    String? captchaId,
+    String? captchaCode,
+  }) async {
+    final data = {
+      'account': account,
+      'password': password,
+      'nickname': nickname,
+      'verification_code': verificationCode,
+    };
+
+    if (captchaId != null) data['captcha_id'] = captchaId;
+    if (captchaCode != null) data['captcha_code'] = captchaCode;
+
+    return await _post('/auth/register', data: data);
+  }
+
+  /// 获取图形验证码
+  static Future<Map<String, dynamic>> getCaptcha() async {
+    return await _get('/auth/captcha');
+  }
+
+  /// 检查账号是否存在
+  static Future<Map<String, dynamic>> checkExists({
+    required String type, // 'email' 或 'phone'
+    required String target,
+  }) async {
+    return await _get('/auth/check_exists', queryParams: {
+      'type': type,
+      'target': target,
+    });
+  }
+
+  /// 获取短信验证码
+  static Future<Map<String, dynamic>> getSMSVerificationCode({
+    required String phone,
+  }) async {
+    return await _post('/auth/sms_code', data: {
+      'phone': phone,
+    });
+  }
+
+  /// 获取邮箱验证码
+  static Future<Map<String, dynamic>> getVerificationCode({
+    required String email,
+    String? type,
+  }) async {
+    final data = {
+      'email': email,
+    };
+
+    if (type != null) data['type'] = type;
+
+    return await _post('/auth/email_code', data: data);
+  }
+
+  /// 发送验证码
+  static Future<Map<String, dynamic>> sendVerificationCode({
+    required String account,
+    required String type, // 'register', 'reset_password', 'bind_email', 'bind_phone'
+  }) async {
+    return await _post('/auth/verification_code', data: {
+      'account': account,
+      'type': type,
+    });
+  }
+
+  /// 获取用户信息
+  static Future<Map<String, dynamic>> getUserInfo() async {
+    return await _get('/user/info');
+  }
+
+  /// 更新用户信息
+  static Future<Map<String, dynamic>> updateUserInfo(Map<String, dynamic> data) async {
+    return await _post('/user/update', data: data);
+  }
+
+  /// 根据ID获取用户信息
   static Future<Map<String, dynamic>> getUserById(String userId) async {
-    return await _get('/user/${userId}');
+    return await _get('/user/$userId');
   }
 
-  // 更新用户信息
-  static Future<Map<String, dynamic>> updateUserInfo(Map<String, dynamic> userInfo) async {
-    return await _put('/user/info', data: userInfo);
+  /// 搜索用户
+  static Future<Map<String, dynamic>> searchUser({
+    required String keyword,
+  }) async {
+    return await _get('/user/search', queryParams: {
+      'keyword': keyword,
+    });
   }
 
-  // 获取聊天列表
-  static Future<Map<String, dynamic>> getChatList() async {
-    return await _get('/chat/list');
+  /// 搜索用户（兼容旧版本）
+  static Future<Map<String, dynamic>> searchUsers({
+    required String keyword,
+    int? page,
+    int? pageSize,
+  }) async {
+    final params = <String, dynamic>{
+      'keyword': keyword,
+    };
+
+    if (page != null) params['page'] = page.toString();
+    if (pageSize != null) params['page_size'] = pageSize.toString();
+
+    return await _get('/user/search', queryParams: params);
   }
 
-  // 获取最近聊天列表
-  static Future<Map<String, dynamic>> getRecentChats({
+  /// 获取好友列表
+  static Future<Map<String, dynamic>> getFriends() async {
+    return await _get('/friend/list');
+  }
+
+  /// 获取好友列表（兼容旧版本）
+  static Future<Map<String, dynamic>> getFriendList() async {
+    return await getFriends();
+  }
+
+  /// 获取好友列表（兼容旧版本2）
+  static Future<Map<String, dynamic>> getFriendsList({String? userId}) async {
+    return await getFriends();
+  }
+
+  /// 添加好友
+  static Future<Map<String, dynamic>> addFriend({
+    required String targetId,
+    String? message,
+  }) async {
+    final data = <String, dynamic>{
+      'target_id': targetId,
+    };
+
+    if (message != null) {
+      data['message'] = message;
+    }
+
+    return await _post('/friend/add', data: data);
+  }
+
+  /// 同意好友请求
+  static Future<Map<String, dynamic>> agreeFriendRequest({
+    required String requestId,
+  }) async {
+    return await _post('/friend/request/agree', data: {
+      'request_id': requestId,
+    });
+  }
+
+  /// 拒绝好友请求
+  static Future<Map<String, dynamic>> rejectFriendRequest({
+    required String requestId,
+  }) async {
+    return await _post('/friend/request/reject', data: {
+      'request_id': requestId,
+    });
+  }
+
+  /// 批量同意好友请求
+  static Future<Map<String, dynamic>> batchAgreeFriendRequests({
+    required List<String> requestIds,
+  }) async {
+    return await _post('/friend/request/batch/agree', data: {
+      'request_ids': requestIds,
+    });
+  }
+
+  /// 批量拒绝好友请求
+  static Future<Map<String, dynamic>> batchRejectFriendRequests({
+    required List<String> requestIds,
+  }) async {
+    return await _post('/friend/request/batch/reject', data: {
+      'request_ids': requestIds,
+    });
+  }
+
+  /// 拉黑好友
+  static Future<Map<String, dynamic>> blockFriend({
+    required String friendId,
+  }) async {
+    return await _post('/friend/block', data: {
+      'friend_id': friendId,
+    });
+  }
+
+  /// 取消拉黑好友
+  static Future<Map<String, dynamic>> unblockFriend({
+    required String friendId,
+  }) async {
+    return await _post('/friend/unblock', data: {
+      'friend_id': friendId,
+    });
+  }
+
+  /// 获取好友添加方式
+  static Future<Map<String, dynamic>> getFriendAddMode({
+    String? userId,
+  }) async {
+    final params = <String, dynamic>{};
+
+    if (userId != null) {
+      params['user_id'] = userId;
+    }
+
+    return await _get('/friend/add/mode', queryParams: params);
+  }
+
+  /// 设置好友添加方式
+  static Future<Map<String, dynamic>> setFriendAddMode({
+    required String mode, // 'all', 'verify', 'none'
+  }) async {
+    return await _post('/friend/add/mode', data: {
+      'mode': mode,
+    });
+  }
+
+  /// 获取推荐好友
+  static Future<Map<String, dynamic>> getRecommendedFriends({
+    int? page,
+    int? pageSize,
+    String? gender,
+  }) async {
+    final params = <String, dynamic>{};
+
+    if (page != null) params['page'] = page.toString();
+    if (pageSize != null) params['page_size'] = pageSize.toString();
+    if (gender != null) params['gender'] = gender;
+
+    return await _get('/friend/recommend', queryParams: params);
+  }
+
+  /// 获取好友请求列表
+  static Future<Map<String, dynamic>> getFriendRequests({String? userId, int page = 1, int pageSize = 20}) async {
+    final params = <String, dynamic>{
+      'page': page.toString(),
+      'page_size': pageSize.toString(),
+    };
+
+    if (userId != null) {
+      params['user_id'] = userId;
+    }
+
+    return await _get('/friend/requests', queryParams: params);
+  }
+
+  /// 获取聊天记录
+  static Future<Map<String, dynamic>> getChatHistory({
+    required String targetId,
+    String? lastMessageId,
+    int? limit,
+  }) async {
+    final params = <String, dynamic>{
+      'target_id': targetId,
+    };
+
+    if (lastMessageId != null) params['last_message_id'] = lastMessageId;
+    if (limit != null) params['limit'] = limit;
+
+    return await _get('/chat/history', queryParams: params);
+  }
+
+  /// 获取聊天记录（兼容旧版本）
+  static Future<Map<String, dynamic>> getMessagesByUser({
+    required String targetId,
+    String? userId,
+    String? lastMessageId,
+    int? limit,
+  }) async {
+    return await getChatHistory(
+      targetId: targetId,
+      lastMessageId: lastMessageId,
+      limit: limit,
+    );
+  }
+
+  /// 发送消息
+  static Future<Map<String, dynamic>> sendMessage({
+    required String targetId,
+    required String content,
+    required String type, // 'text', 'image', 'video', 'file', 'voice', 'location'
+    String? fromId,
+  }) async {
+    final data = {
+      'target_id': targetId,
+      'content': content,
+      'type': type,
+    };
+
+    if (fromId != null) {
+      data['from_id'] = fromId;
+    }
+
+    return await _post('/chat/send', data: data);
+  }
+
+  /// 标记消息为已读
+  static Future<Map<String, dynamic>> markMessagesAsRead({
+    required String targetId,
+    required String lastMessageId,
+  }) async {
+    return await _post('/chat/read', data: {
+      'target_id': targetId,
+      'last_message_id': lastMessageId,
+    });
+  }
+
+  /// 撤回消息
+  static Future<Map<String, dynamic>> recallMessage({
+    required String messageId,
+  }) async {
+    return await _post('/chat/recall', data: {
+      'message_id': messageId,
+    });
+  }
+
+  /// 转发消息
+  static Future<Map<String, dynamic>> forwardMessage({
+    required String messageId,
+    required String targetId,
+    required String type, // "user" 或 "group"
+  }) async {
+    return await _post('/chat/forward', data: {
+      'message_id': messageId,
+      'target_id': targetId,
+      'type': type,
+    });
+  }
+
+  /// 获取会话列表
+  static Future<Map<String, dynamic>> getConversations() async {
+    return await _get('/chat/conversations');
+  }
+
+  /// 删除会话
+  static Future<Map<String, dynamic>> deleteConversation({
+    required String targetId,
+  }) async {
+    return await _post('/chat/conversation/delete', data: {
+      'target_id': targetId,
+    });
+  }
+
+  /// 删除消息
+  static Future<Map<String, dynamic>> deleteMessage({
+    required String messageId,
+  }) async {
+    return await _post('/message/delete', data: {
+      'message_id': messageId,
+    });
+  }
+
+  /// 获取群组列表
+  static Future<Map<String, dynamic>> getGroups() async {
+    return await _get('/group/list');
+  }
+
+  /// 获取群组列表（兼容旧版本）
+  static Future<Map<String, dynamic>> getGroupList({String? userId}) async {
+    return await getGroups();
+  }
+
+  /// 获取群聊记录
+  static Future<Map<String, dynamic>> getGroupChatHistory({
+    required String groupId,
+    String? lastMessageId,
+    int? limit,
+  }) async {
+    final params = <String, dynamic>{
+      'group_id': groupId,
+    };
+
+    if (lastMessageId != null) params['last_message_id'] = lastMessageId;
+    if (limit != null) params['limit'] = limit;
+
+    return await _get('/group/chat/history', queryParams: params);
+  }
+
+  /// 获取群聊记录（兼容旧版本）
+  static Future<Map<String, dynamic>> getGroupMessages({
+    required String groupId,
+    String? lastMessageId,
+    int? limit,
+    String? offset,
+  }) async {
+    return await getGroupChatHistory(
+      groupId: groupId,
+      lastMessageId: lastMessageId,
+      limit: limit,
+    );
+  }
+
+  /// 发送群聊消息
+  static Future<Map<String, dynamic>> sendGroupMessage({
+    required String groupId,
+    required String content,
+    required String type,
+    List<String>? mentionedUsers,
+    String? extra,
+  }) async {
+    final data = {
+      'group_id': groupId,
+      'content': content,
+      'type': type,
+    };
+
+    if (mentionedUsers != null && mentionedUsers.isNotEmpty) {
+      data['mentioned_users'] = mentionedUsers.join(',');
+    }
+
+    if (extra != null && extra.isNotEmpty) {
+      data['extra'] = extra;
+    }
+
+    return await _post('/group/chat/send', data: data);
+  }
+
+  /// 标记群聊消息为已读
+  static Future<Map<String, dynamic>> markGroupMessagesAsRead({
+    required String groupId,
+    required String lastMessageId,
+  }) async {
+    return await _post('/group/chat/read', data: {
+      'group_id': groupId,
+      'last_message_id': lastMessageId,
+    });
+  }
+
+  /// 撤回群聊消息
+  static Future<Map<String, dynamic>> recallGroupMessage({
+    required String messageId,
+  }) async {
+    return await _post('/group/chat/recall', data: {
+      'message_id': messageId,
+    });
+  }
+
+  /// 获取群成员列表
+  static Future<Map<String, dynamic>> getGroupMembers({
+    required String groupId,
+  }) async {
+    return await _get('/group/members', queryParams: {
+      'group_id': groupId,
+    });
+  }
+
+  /// 创建群组
+  static Future<Map<String, dynamic>> createGroup({
+    required String name,
+    required String avatar,
+    required List<String> memberIds,
+    String? ownerId,
+  }) async {
+    final data = {
+      'name': name,
+      'avatar': avatar,
+      'member_ids': memberIds,
+    };
+
+    if (ownerId != null) {
+      data['owner_id'] = ownerId;
+    }
+
+    return await _post('/group/create', data: data);
+  }
+
+  /// 添加群成员
+  static Future<Map<String, dynamic>> addGroupMember({
+    required String groupId,
     required String userId,
-    int page = 1,
-    int pageSize = 20,
   }) async {
-    return await _get('/chat/recent', queryParams: {
+    return await _post('/group/member/add', data: {
+      'group_id': groupId,
       'user_id': userId,
-      'page': page.toString(),
-      'page_size': pageSize.toString(),
     });
   }
 
-  // 语音通话相关API
-
-  // 获取语音通话记录
-  static Future<Map<String, dynamic>> getVoiceCallRecords({
-    int page = 1,
-    int pageSize = 20,
-    String callType = 'all', // all, incoming, outgoing
+  /// 移除群成员
+  static Future<Map<String, dynamic>> removeGroupMember({
+    required String groupId,
+    required String userId,
   }) async {
-    return await _get('/call/voice/records', queryParams: {
-      'page': page.toString(),
-      'page_size': pageSize.toString(),
-      'call_type': callType,
+    return await _post('/group/member/remove', data: {
+      'group_id': groupId,
+      'user_id': userId,
     });
   }
 
-  // 获取语音通话详情
-  static Future<Map<String, dynamic>> getVoiceCallDetail(String callId) async {
-    return await _get('/call/voice/records/$callId');
+  /// 退出群组
+  static Future<Map<String, dynamic>> quitGroup({
+    required String groupId,
+  }) async {
+    return await _post('/group/quit', data: {
+      'group_id': groupId,
+    });
   }
 
-  // 发起语音通话
+  /// 解散群组
+  static Future<Map<String, dynamic>> dismissGroup({
+    required String groupId,
+  }) async {
+    return await _post('/group/dismiss', data: {
+      'group_id': groupId,
+    });
+  }
+
+  /// 上传图片
+  static Future<Map<String, dynamic>> uploadImage({
+    required String filePath,
+    required String targetId,
+    String? fromId,
+  }) async {
+    final fields = <String, String>{
+      'target_id': targetId,
+    };
+
+    if (fromId != null) {
+      fields['from_id'] = fromId;
+    }
+
+    return await _uploadFile('/message/image', filePath, 'image', fields: fields);
+  }
+
+  /// 上传视频
+  static Future<Map<String, dynamic>> uploadVideo({
+    required String filePath,
+    required String targetId,
+    int duration = 0,
+    String? thumbnailPath,
+    String? fromId,
+  }) async {
+    final fields = <String, String>{
+      'target_id': targetId,
+      'duration': duration.toString(),
+    };
+
+    if (thumbnailPath != null) {
+      fields['thumbnail_path'] = thumbnailPath;
+    }
+
+    if (fromId != null) {
+      fields['from_id'] = fromId;
+    }
+
+    return await _uploadFile('/message/video', filePath, 'video', fields: fields);
+  }
+
+  /// 上传文件
+  static Future<Map<String, dynamic>> uploadFile({
+    required String filePath,
+    required String targetId,
+    required String fileName,
+    String? fileType,
+    String? fromId,
+  }) async {
+    final fields = <String, String>{
+      'target_id': targetId,
+      'file_name': fileName,
+    };
+
+    if (fileType != null) {
+      fields['file_type'] = fileType;
+    }
+
+    if (fromId != null) {
+      fields['from_id'] = fromId;
+    }
+
+    return await _uploadFile('/message/file', filePath, 'file', fields: fields);
+  }
+
+  /// 上传文件（兼容旧版本）
+  static Future<Map<String, dynamic>> uploadFileCompat(String filePath, String fileType) async {
+    return await uploadFile(filePath: filePath, targetId: '0', fileName: 'file', fileType: fileType);
+  }
+
+  /// 上传文件（兼容旧版本2）
+  static Future<Map<String, dynamic>> uploadFileOld(String filePath, String fileType) async {
+    return await uploadFile(filePath: filePath, targetId: '0', fileName: 'file', fileType: fileType);
+  }
+
+  /// 上传语音消息
+  static Future<Map<String, dynamic>> uploadVoiceMessage({
+    required String filePath,
+    required int duration,
+  }) async {
+    return await _uploadFile('/message/voice', filePath, 'voice', fields: {
+      'duration': duration.toString(),
+    });
+  }
+
+  /// 获取语音消息
+  static Future<Map<String, dynamic>> getVoiceMessage({
+    required String messageId,
+  }) async {
+    return await _get('/message/voice', queryParams: {
+      'message_id': messageId,
+    });
+  }
+
+  /// 发起语音通话
   static Future<Map<String, dynamic>> initiateVoiceCall({
-    required String receiverId,
+    required String targetId,
   }) async {
     return await _post('/call/voice/initiate', data: {
-      'receiver_id': receiverId,
+      'target_id': targetId,
     });
   }
 
-  // 接受语音通话
-  static Future<Map<String, dynamic>> acceptVoiceCallById({
-    required String callId,
+  /// 发起语音通话（兼容旧版本）
+  static Future<Map<String, dynamic>> startVoiceCallWithId({
+    required String targetId,
   }) async {
-    return await _post('/call/voice/accept', data: {
-      'call_id': callId,
-    });
+    return await initiateVoiceCall(targetId: targetId);
   }
 
-  // 拒绝语音通话
-  static Future<Map<String, dynamic>> rejectVoiceCallById({
+  /// 接受语音通话
+  static Future<Map<String, dynamic>> acceptVoiceCall({
+    required String callId,
+    String? fromId,
+  }) async {
+    final data = {
+      'call_id': callId,
+    };
+
+    if (fromId != null) {
+      data['from_id'] = fromId;
+    }
+
+    return await _post('/call/voice/accept', data: data);
+  }
+
+  /// 拒绝语音通话
+  static Future<Map<String, dynamic>> rejectVoiceCall({
     required String callId,
   }) async {
     return await _post('/call/voice/reject', data: {
@@ -550,8 +960,15 @@ class Api {
     });
   }
 
-  // 结束语音通话
-  static Future<Map<String, dynamic>> endVoiceCallById({
+  /// 拒绝语音通话（兼容旧版本）
+  static Future<Map<String, dynamic>> rejectVoiceCallWithId({
+    required String callId,
+  }) async {
+    return await rejectVoiceCall(callId: callId);
+  }
+
+  /// 结束语音通话
+  static Future<Map<String, dynamic>> endVoiceCall({
     required String callId,
   }) async {
     return await _post('/call/voice/end', data: {
@@ -559,51 +976,47 @@ class Api {
     });
   }
 
-  // 获取语音通话统计
-  static Future<Map<String, dynamic>> getVoiceCallStats() async {
-    return await _get('/call/voice/stats');
-  }
-
-  // 视频通话相关API
-
-  // 获取视频通话记录
-  static Future<Map<String, dynamic>> getVideoCallRecords({
-    int page = 1,
-    int pageSize = 20,
-    String callType = 'all', // all, incoming, outgoing
-  }) async {
-    return await _get('/call/video/records', queryParams: {
-      'page': page.toString(),
-      'page_size': pageSize.toString(),
-      'call_type': callType,
-    });
-  }
-
-  // 获取视频通话详情
-  static Future<Map<String, dynamic>> getVideoCallDetail(String callId) async {
-    return await _get('/call/video/records/$callId');
-  }
-
-  // 发起视频通话
-  static Future<Map<String, dynamic>> initiateVideoCall({
-    required String receiverId,
-  }) async {
-    return await _post('/call/video/initiate', data: {
-      'receiver_id': receiverId,
-    });
-  }
-
-  // 接受视频通话
-  static Future<Map<String, dynamic>> acceptVideoCallById({
+  /// 结束语音通话（兼容旧版本）
+  static Future<Map<String, dynamic>> endVoiceCallWithId({
     required String callId,
   }) async {
-    return await _post('/call/video/accept', data: {
-      'call_id': callId,
+    return await endVoiceCall(callId: callId);
+  }
+
+  /// 发起视频通话
+  static Future<Map<String, dynamic>> initiateVideoCall({
+    required String targetId,
+  }) async {
+    return await _post('/call/video/initiate', data: {
+      'target_id': targetId,
     });
   }
 
-  // 拒绝视频通话
-  static Future<Map<String, dynamic>> rejectVideoCallById({
+  /// 发起视频通话（兼容旧版本）
+  static Future<Map<String, dynamic>> startVideoCallWithId({
+    required String targetId,
+  }) async {
+    return await initiateVideoCall(targetId: targetId);
+  }
+
+  /// 接受视频通话
+  static Future<Map<String, dynamic>> acceptVideoCall({
+    required String callId,
+    String? fromId,
+  }) async {
+    final data = {
+      'call_id': callId,
+    };
+
+    if (fromId != null) {
+      data['from_id'] = fromId;
+    }
+
+    return await _post('/call/video/accept', data: data);
+  }
+
+  /// 拒绝视频通话
+  static Future<Map<String, dynamic>> rejectVideoCall({
     required String callId,
   }) async {
     return await _post('/call/video/reject', data: {
@@ -611,8 +1024,15 @@ class Api {
     });
   }
 
-  // 结束视频通话
-  static Future<Map<String, dynamic>> endVideoCallById({
+  /// 拒绝视频通话（兼容旧版本）
+  static Future<Map<String, dynamic>> rejectVideoCallWithId({
+    required String callId,
+  }) async {
+    return await rejectVideoCall(callId: callId);
+  }
+
+  /// 结束视频通话
+  static Future<Map<String, dynamic>> endVideoCall({
     required String callId,
   }) async {
     return await _post('/call/video/end', data: {
@@ -620,1045 +1040,63 @@ class Api {
     });
   }
 
-  // 获取视频通话统计
-  static Future<Map<String, dynamic>> getVideoCallStats() async {
-    return await _get('/call/video/stats');
-  }
-
-  // WebRTC相关API
-
-  // 发起通话
-  static Future<Map<String, dynamic>> startCall({
-    required String fromId,
-    required String toId,
-    required String type,  // 'voice' 或 'video'
-    required String sdp,
-  }) async {
-    return await _post('/call/start', data: {
-      'from_id': fromId,
-      'to_id': toId,
-      'type': type,
-      'sdp': sdp,
-    });
-  }
-
-  // 接听通话
-  static Future<Map<String, dynamic>> answerCall({
+  /// 结束视频通话（兼容旧版本）
+  static Future<Map<String, dynamic>> endVideoCallWithId({
     required String callId,
   }) async {
-    return await _post('/call/answer', data: {
-      'call_id': callId,
-    });
+    return await endVideoCall(callId: callId);
   }
 
-  // 拒绝通话
-  static Future<Map<String, dynamic>> rejectCall({
-    required String callId,
-  }) async {
-    return await _post('/call/reject', data: {
-      'call_id': callId,
-    });
+  /// 获取WebSocket连接URL
+  static Future<Map<String, dynamic>> getWebSocketUrl() async {
+    return await _get('/websocket/token');
   }
 
-  // 结束通话
-  static Future<Map<String, dynamic>> endCall({
-    required String callId,
-  }) async {
-    return await _post('/call/end', data: {
-      'call_id': callId,
-    });
+  /// 通用GET请求
+  static Future<Map<String, dynamic>> get(String path, {Map<String, dynamic>? queryParams}) async {
+    return await _get(path, queryParams: queryParams);
   }
 
-  // 获取聊天消息
-  static Future<Map<String, dynamic>> getChatMessages(int chatId, {int page = 1, int pageSize = 20}) async {
-    return await _get('/chat/messages/$chatId', queryParams: {
-      'page': page.toString(),
-      'page_size': pageSize.toString(),
-    });
+  /// 通用POST请求
+  static Future<Map<String, dynamic>> post(String path, {Map<String, dynamic>? data}) async {
+    return await _post(path, data: data ?? {});
   }
 
-  // 发送聊天消息
-  static Future<Map<String, dynamic>> sendChatMessage(int receiverId, String content, {String? type, String? extra}) async {
-    return await _post('/chat/send', data: {
-      'receiver_id': receiverId,
-      'content': content,
-      'type': type ?? 'text',
-      if (extra != null) 'extra': extra,
-    });
+  /// 通用PUT请求
+  static Future<Map<String, dynamic>> put(String path, {Map<String, dynamic>? data}) async {
+    return await _put(path, data: data ?? {});
   }
 
-  // 发送语音消息
-  static Future<Map<String, dynamic>> sendVoiceMessage(int receiverId, String voiceUrl, int duration) async {
-    return await _post('/chat/send', data: {
-      'receiver_id': receiverId,
-      'content': voiceUrl,
-      'type': 'voice',
-      'extra': jsonEncode({'duration': duration}),
-    });
+  /// 通用DELETE请求
+  static Future<Map<String, dynamic>> delete(String path, {Map<String, dynamic>? data}) async {
+    return await _delete(path, data: data ?? {});
   }
 
-  // 发送图片消息
-  static Future<Map<String, dynamic>> sendImageMessage(int receiverId, String imageUrl) async {
-    return await _post('/chat/send', data: {
-      'receiver_id': receiverId,
-      'content': imageUrl,
-      'type': 'image',
-    });
+  /// 获取钱包信息
+  static Future<Map<String, dynamic>> getWalletInfo() async {
+    return await _get('/wallet/info');
   }
 
-  // 发送视频消息
-  static Future<Map<String, dynamic>> sendVideoMessage(int receiverId, String videoUrl, String? thumbnailUrl) async {
-    return await _post('/chat/send', data: {
-      'receiver_id': receiverId,
-      'content': videoUrl,
-      'type': 'video',
-      'extra': jsonEncode({'thumbnail': thumbnailUrl}),
-    });
+  /// 获取红包详情
+  static Future<Map<String, dynamic>> getRedPacketDetail({required String redPacketId}) async {
+    return await _get('/wallet/red-packet/$redPacketId');
   }
 
-  // 发送文件消息
-  static Future<Map<String, dynamic>> sendFileMessage(int receiverId, String fileUrl, String fileName, int fileSize) async {
-    return await _post('/chat/send', data: {
-      'receiver_id': receiverId,
-      'content': fileUrl,
-      'type': 'file',
-      'extra': jsonEncode({
-        'file_name': fileName,
-        'file_size': fileSize,
-      }),
-    });
+  /// 抢红包
+  static Future<Map<String, dynamic>> grabRedPacketWithWallet({required String redPacketId}) async {
+    return await _post('/wallet/red-packet/$redPacketId/receive');
   }
 
-  // 发送位置消息
-  static Future<Map<String, dynamic>> sendLocationMessage(int receiverId, double latitude, double longitude, String address) async {
-    return await _post('/chat/send', data: {
-      'receiver_id': receiverId,
-      'content': address,
-      'type': 'location',
-      'extra': jsonEncode({
-        'latitude': latitude,
-        'longitude': longitude,
-      }),
-    });
-  }
-
-  // 发送红包
-  static Future<Map<String, dynamic>> sendRedPacket({
-    required String senderId,
-    required String receiverId,
+  /// 发红包
+  static Future<Map<String, dynamic>> sendRedPacketWithWallet({
+    required String targetId,
     required double amount,
-    required int count,
     required String greeting,
   }) async {
-    return await _post('/chat/redpacket/send', data: {
-      'sender_id': int.parse(senderId),
-      'receiver_id': int.parse(receiverId),
+    return await _post('/wallet/red-packet', data: {
+      'target_id': targetId,
       'amount': amount,
-      'count': count,
       'greeting': greeting,
     });
-  }
-
-  // 抢红包
-  static Future<Map<String, dynamic>> grabRedPacket({
-    required String redPacketId,
-    required String userId,
-  }) async {
-    return await _post('/chat/redpacket/grab', data: {
-      'red_packet_id': int.parse(redPacketId),
-      'user_id': int.parse(userId),
-    });
-  }
-
-  // 获取红包详情
-  static Future<Map<String, dynamic>> getRedPacketDetail({
-    required String redPacketId,
-  }) async {
-    debugPrint('[API] 获取红包详情: 红包ID=$redPacketId');
-
-    try {
-      // 尝试两个可能的API端点
-      try {
-        return await _get('/chat/redpacket/detail', queryParams: {
-          'id': redPacketId,
-        });
-      } catch (e) {
-        debugPrint('[API] 第一个红包详情API端点失败，尝试备用端点: $e');
-        return await _get('/red-packet/$redPacketId');
-      }
-    } catch (e) {
-      debugPrint('[API] 获取红包详情异常: $e');
-      return {'success': false, 'msg': '获取红包详情失败: $e'};
-    }
-  }
-
-  // 获取好友列表
-  static Future<Map<String, dynamic>> getFriendList() async {
-    return await _get('/friends/list');
-  }
-
-  // 添加好友
-  static Future<Map<String, dynamic>> addFriend({
-    required String userId,
-    required String friendId,
-    String message = '',
-    String sourceType = 'search',
-  }) async {
-    return await _post('/friends/add', data: {
-      'user_id': userId,
-      'friend_id': friendId,
-      'message': message,
-      'source_type': sourceType,
-    });
-  }
-
-  // 搜索用户
-  static Future<Map<String, dynamic>> searchUsers({
-    required String keyword,
-    String? currentUserId,
-    String? gender,
-  }) async {
-    try {
-      final response = await _get('/friends/search', queryParams: {
-        'keyword': keyword,
-        if (currentUserId != null) 'current_user_id': currentUserId,
-        if (gender != null && gender.isNotEmpty) 'gender': gender,
-      });
-      return response;
-    } catch (e) {
-      debugPrint('搜索用户失败，使用模拟数据: $e');
-      // 使用模拟数据
-      return MockApi.searchUsers(
-        keyword: keyword,
-        currentUserId: currentUserId,
-        gender: gender,
-      );
-    }
-  }
-
-  // 获取推荐好友
-  static Future<Map<String, dynamic>> getRecommendedFriends({
-    String? currentUserId,
-    int limit = 10,
-    String? gender,
-  }) async {
-    try {
-      final response = await _get('/friends/recommended', queryParams: {
-        if (currentUserId != null) 'current_user_id': currentUserId,
-        'limit': limit.toString(),
-        if (gender != null && gender.isNotEmpty) 'gender': gender,
-      });
-      return response;
-    } catch (e) {
-      debugPrint('获取推荐好友失败，使用模拟数据: $e');
-      // 使用模拟数据
-      return MockApi.getRecommendedFriends(
-        currentUserId: currentUserId,
-        limit: limit,
-        gender: gender,
-      );
-    }
-  }
-
-  // 获取好友请求列表
-  static Future<Map<String, dynamic>> getFriendRequests({
-    required String userId,
-    String type = 'received',
-    String status = 'pending',
-  }) async {
-    return await _get('/friends/requests', queryParams: {
-      'user_id': userId,
-      'type': type,
-      'status': status,
-    });
-  }
-
-  // 同意好友请求
-  static Future<Map<String, dynamic>> agreeFriendRequest({
-    required String requestId,
-    required String userId,
-  }) async {
-    return await _post('/friends/agree', data: {
-      'request_id': requestId,
-      'user_id': userId,
-    });
-  }
-
-  // 拒绝好友请求
-  static Future<Map<String, dynamic>> rejectFriendRequest({
-    required String requestId,
-    required String userId,
-  }) async {
-    return await _post('/friends/reject', data: {
-      'request_id': requestId,
-      'user_id': userId,
-    });
-  }
-
-  // 批量同意好友请求
-  static Future<Map<String, dynamic>> batchAgreeFriendRequests({
-    required String userId,
-    required List<String> requestIds,
-  }) async {
-    return await _post('/friends/batch/agree', data: {
-      'user_id': userId,
-      'request_ids': requestIds,
-    });
-  }
-
-  // 批量拒绝好友请求
-  static Future<Map<String, dynamic>> batchRejectFriendRequests({
-    required String userId,
-    required List<String> requestIds,
-  }) async {
-    return await _post('/friends/batch/reject', data: {
-      'user_id': userId,
-      'request_ids': requestIds,
-    });
-  }
-
-  // 屏蔽好友
-  static Future<Map<String, dynamic>> blockFriend({
-    required String userId,
-    required String friendId,
-  }) async {
-    return await _post('/friends/block', data: {
-      'user_id': userId,
-      'friend_id': friendId,
-    });
-  }
-
-  // 取消屏蔽好友
-  static Future<Map<String, dynamic>> unblockFriend({
-    required String userId,
-    required String friendId,
-  }) async {
-    return await _post('/friends/unblock', data: {
-      'user_id': userId,
-      'friend_id': friendId,
-    });
-  }
-
-  // 获取好友添加方式
-  static Future<Map<String, dynamic>> getFriendAddMode({
-    required String userId,
-  }) async {
-    return await _get('/friends/mode', queryParams: {
-      'user_id': userId,
-    });
-  }
-
-  // 设置好友添加方式
-  static Future<Map<String, dynamic>> setFriendAddMode({
-    required String userId,
-    required int mode,
-  }) async {
-    return await _post('/friends/mode', data: {
-      'user_id': int.parse(userId),
-      'mode': mode,
-    });
-  }
-
-  // 开始语音通话
-  static Future<Map<String, dynamic>> startVoiceCallWithId(int receiverId) async {
-    return await _post('/chat/call/voice/start', data: {
-      'receiver_id': receiverId,
-    });
-  }
-
-  // 开始语音通话（兼容旧版）
-  static Future<Map<String, dynamic>> startVoiceCall({
-    required String fromId,
-    required String toId,
-  }) async {
-    return await _post('/chat/call/voice/start', data: {
-      'caller_id': int.parse(fromId),
-      'receiver_id': int.parse(toId),
-    });
-  }
-
-  // 结束语音通话
-  static Future<Map<String, dynamic>> endVoiceCallWithId(int callId) async {
-    return await _post('/chat/call/voice/end', data: {
-      'call_id': callId,
-    });
-  }
-
-  // 结束语音通话（兼容旧版）
-  static Future<Map<String, dynamic>> endVoiceCall({
-    required String fromId,
-    required String toId,
-  }) async {
-    return await _post('/chat/call/voice/end', data: {
-      'caller_id': int.parse(fromId),
-      'receiver_id': int.parse(toId),
-    });
-  }
-
-  // 拒绝语音通话
-  static Future<Map<String, dynamic>> rejectVoiceCallWithId(int callId) async {
-    return await _post('/chat/call/voice/reject', data: {
-      'call_id': callId,
-    });
-  }
-
-  // 拒绝语音通话（兼容旧版）
-  static Future<Map<String, dynamic>> rejectVoiceCall({
-    required String fromId,
-    required String toId,
-  }) async {
-    return await _post('/chat/call/voice/reject', data: {
-      'caller_id': int.parse(fromId),
-      'receiver_id': int.parse(toId),
-    });
-  }
-
-  // 接受语音通话
-  static Future<Map<String, dynamic>> acceptVoiceCall({
-    required String fromId,
-    required String toId,
-  }) async {
-    return await _post('/chat/call/voice/accept', data: {
-      'caller_id': int.parse(fromId),
-      'receiver_id': int.parse(toId),
-    });
-  }
-
-  // 开始视频通话
-  static Future<Map<String, dynamic>> startVideoCallWithId(int receiverId) async {
-    return await _post('/chat/call/video/start', data: {
-      'receiver_id': receiverId,
-    });
-  }
-
-  // 开始视频通话（兼容旧版）
-  static Future<Map<String, dynamic>> startVideoCall({
-    required String fromId,
-    required String toId,
-  }) async {
-    return await _post('/chat/call/video/start', data: {
-      'caller_id': int.parse(fromId),
-      'receiver_id': int.parse(toId),
-    });
-  }
-
-  // 结束视频通话
-  static Future<Map<String, dynamic>> endVideoCallWithId(int callId) async {
-    return await _post('/chat/call/video/end', data: {
-      'call_id': callId,
-    });
-  }
-
-  // 结束视频通话（兼容旧版）
-  static Future<Map<String, dynamic>> endVideoCall({
-    required String fromId,
-    required String toId,
-  }) async {
-    return await _post('/chat/call/video/end', data: {
-      'caller_id': int.parse(fromId),
-      'receiver_id': int.parse(toId),
-    });
-  }
-
-  // 拒绝视频通话
-  static Future<Map<String, dynamic>> rejectVideoCallWithId(int callId) async {
-    return await _post('/chat/call/video/reject', data: {
-      'call_id': callId,
-    });
-  }
-
-  // 拒绝视频通话（兼容旧版）
-  static Future<Map<String, dynamic>> rejectVideoCall({
-    required String fromId,
-    required String toId,
-  }) async {
-    return await _post('/chat/call/video/reject', data: {
-      'caller_id': int.parse(fromId),
-      'receiver_id': int.parse(toId),
-    });
-  }
-
-  // 接受视频通话
-  static Future<Map<String, dynamic>> acceptVideoCall({
-    required String fromId,
-    required String toId,
-  }) async {
-    return await _post('/chat/call/video/accept', data: {
-      'caller_id': int.parse(fromId),
-      'receiver_id': int.parse(toId),
-    });
-  }
-
-  // 获取通话历史
-  static Future<Map<String, dynamic>> getCallHistory({String type = 'all'}) async {
-    return await _get('/chat/call/history', queryParams: {
-      'type': type,
-    });
-  }
-
-  // 上传文件
-  static Future<Map<String, dynamic>> uploadFile(String filePath, String fileType) async {
-    var uri = Uri.parse('$_base/chat/upload');
-    var request = http.MultipartRequest('POST', uri);
-
-    // 添加认证头
-    final headers = _getAuthHeaders();
-    request.headers.addAll(headers);
-
-    // 添加文件类型
-    request.fields['type'] = fileType;
-
-    // 检查文件是否存在
-    final file = File(filePath);
-    if (!await file.exists()) {
-      debugPrint('[API] 文件不存在: $filePath');
-      return {
-        'success': false,
-        'msg': '文件不存在: $filePath',
-      };
-    }
-
-    // 添加文件
-    try {
-      request.files.add(await http.MultipartFile.fromPath('file', filePath));
-    } catch (e) {
-      debugPrint('[API] 添加文件到请求失败: $e');
-      return {
-        'success': false,
-        'msg': '添加文件到请求失败: $e',
-      };
-    }
-
-    debugPrint('[API] 上传文件: $filePath, 类型: $fileType, URL: $uri');
-
-    try {
-      // 发送请求
-      var response = await request.send();
-      var responseData = await response.stream.bytesToString();
-
-      debugPrint('[API] 上传文件响应状态码: ${response.statusCode}');
-      debugPrint('[API] 上传文件响应数据: $responseData');
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        try {
-          var jsonResponse = jsonDecode(responseData);
-
-          // 检查URL是否是相对路径，如果是，添加baseUrl前缀
-          if (jsonResponse['success'] == true &&
-              jsonResponse['data'] != null &&
-              jsonResponse['data']['url'] != null) {
-
-            String url = jsonResponse['data']['url'];
-            if (url.startsWith('/')) {
-              // 将相对路径转换为完整URL
-              jsonResponse['data']['url'] = '$baseUrl$url';
-              debugPrint('[API] 转换文件URL: $url -> ${jsonResponse['data']['url']}');
-            }
-          }
-
-          return jsonResponse;
-        } catch (e) {
-          debugPrint('[API] 解析上传文件响应失败: $e');
-          return {
-            'success': false,
-            'msg': '解析响应失败: $responseData',
-          };
-        }
-      } else {
-        debugPrint('[API] 上传文件失败，状态码: ${response.statusCode}');
-        return {
-          'success': false,
-          'msg': '上传文件失败，服务器返回: ${response.statusCode}',
-          'data': {
-            'url': 'file://$filePath', // 失败时返回本地路径，确保UI可以显示
-          }
-        };
-      }
-    } catch (e) {
-      debugPrint('[API] 上传文件异常: $e');
-      return {
-        'success': false,
-        'msg': '上传文件失败: $e',
-        'data': {
-          'url': 'file://$filePath', // 失败时返回本地路径，确保UI可以显示
-        }
-      };
-    }
-  }
-
-  // 获取表情包列表
-  static Future<Map<String, dynamic>> getEmoticonPackages() async {
-    return await _get('/chat/emoticon/packages');
-  }
-
-  // 获取表情列表
-  static Future<Map<String, dynamic>> getEmoticons({int? packageId}) async {
-    return await _get('/chat/emoticon/list', queryParams: {
-      if (packageId != null) 'package_id': packageId.toString(),
-    });
-  }
-
-
-
-  // 获取钱包信息
-  static Future<Map<String, dynamic>> getWalletInfo() async {
-    debugPrint('[API] 获取钱包信息');
-
-    try {
-      // 尝试两个可能的API端点
-      try {
-        final response = await _get('/wallet/info');
-        debugPrint('[API] 钱包信息响应: $response');
-        return response;
-      } catch (e) {
-        debugPrint('[API] 第一个钱包信息API端点失败，尝试备用端点: $e');
-        final response = await _get('/wallet');
-        debugPrint('[API] 备用钱包信息响应: $response');
-        return response;
-      }
-    } catch (e) {
-      debugPrint('[API] 获取钱包信息异常: $e');
-      return {'success': false, 'msg': '获取钱包信息失败: $e'};
-    }
-  }
-
-  // 获取交易记录
-  static Future<Map<String, dynamic>> getTransactions({int page = 1, int pageSize = 20}) async {
-    debugPrint('[API] 获取交易记录: 页码=$page, 每页数量=$pageSize');
-
-    try {
-      // 尝试两个可能的API端点
-      try {
-        final response = await _get('/wallet/transactions', queryParams: {
-          'page': page.toString(),
-          'page_size': pageSize.toString(),
-        });
-        debugPrint('[API] 交易记录响应: $response');
-        return response;
-      } catch (e) {
-        debugPrint('[API] 第一个交易记录API端点失败，尝试备用端点: $e');
-        final response = await _get('/wallet/transaction/list', queryParams: {
-          'page': page.toString(),
-          'limit': pageSize.toString(),
-        });
-        debugPrint('[API] 备用交易记录响应: $response');
-        return response;
-      }
-    } catch (e) {
-      debugPrint('[API] 获取交易记录异常: $e');
-      return {'success': false, 'msg': '获取交易记录失败: $e', 'data': []};
-    }
-  }
-
-  // 转账
-  static Future<Map<String, dynamic>> transfer({
-    required int senderID,
-    required int receiverID,
-    required double amount,
-    String message = '',
-  }) async {
-    debugPrint('[API] 转账: 发送者=$senderID, 接收者=$receiverID, 金额=$amount');
-
-    try {
-      final data = {
-        'sender_id': senderID,
-        'receiver_id': receiverID,
-        'amount': amount,
-        'message': message,
-      };
-
-      debugPrint('[API] 转账请求数据: $data');
-
-      // 尝试两个可能的API端点
-      try {
-        final response = await _post('/wallet/transfer', data: data);
-        debugPrint('[API] 转账响应: $response');
-        return response;
-      } catch (e) {
-        debugPrint('[API] 第一个转账API端点失败，尝试备用端点: $e');
-        final response = await _post('/wallet/transaction/transfer', data: data);
-        debugPrint('[API] 备用转账响应: $response');
-        return response;
-      }
-    } catch (e) {
-      debugPrint('[API] 转账异常: $e');
-      return {'success': false, 'msg': '转账失败: $e'};
-    }
-  }
-
-  // 充值（模拟）
-  static Future<Map<String, dynamic>> recharge({
-    required int userID,
-    required double amount,
-  }) async {
-    debugPrint('[API] 充值: 用户ID=$userID, 金额=$amount');
-
-    try {
-      final data = {
-        'user_id': userID,
-        'amount': amount,
-      };
-
-      debugPrint('[API] 充值请求数据: $data');
-
-      // 尝试两个可能的API端点
-      try {
-        final response = await _post('/wallet/recharge', data: data);
-        debugPrint('[API] 充值响应: $response');
-        return response;
-      } catch (e) {
-        debugPrint('[API] 第一个充值API端点失败，尝试备用端点: $e');
-        final response = await _post('/wallet/transaction/recharge', data: data);
-        debugPrint('[API] 备用充值响应: $response');
-        return response;
-      }
-    } catch (e) {
-      debugPrint('[API] 充值异常: $e');
-      return {'success': false, 'msg': '充值失败: $e'};
-    }
-  }
-
-  // 发送红包（集成钱包系统）
-  static Future<Map<String, dynamic>> sendRedPacketWithWallet({
-    required String senderID,
-    required String receiverID,
-    required double amount,
-    required int count,
-    required String greeting,
-    int? groupID,
-  }) async {
-    debugPrint('[API] 发送红包: 发送者=$senderID, 接收者=$receiverID, 金额=$amount, 数量=$count');
-
-    try {
-      final data = {
-        'sender_id': int.parse(senderID),
-        'receiver_id': int.parse(receiverID),
-        'amount': amount,
-        'count': count,
-        'greeting': greeting,
-        if (groupID != null) 'group_id': groupID,
-      };
-
-      debugPrint('[API] 发送红包请求数据: $data');
-
-      // 尝试两个可能的API端点
-      try {
-        return await _post('/chat/redpacket/send/wallet', data: data);
-      } catch (e) {
-        debugPrint('[API] 第一个红包API端点失败，尝试备用端点: $e');
-        return await _post('/chat/redpacket/send', data: data);
-      }
-    } catch (e) {
-      debugPrint('[API] 发送红包异常: $e');
-      return {'success': false, 'msg': '发送红包失败: $e'};
-    }
-  }
-
-  // 抢红包（集成钱包系统）
-  static Future<Map<String, dynamic>> grabRedPacketWithWallet({
-    required String redPacketID,
-    required String userID,
-  }) async {
-    debugPrint('[API] 抢红包: 红包ID=$redPacketID, 用户ID=$userID');
-
-    try {
-      final data = {
-        'red_packet_id': int.parse(redPacketID),
-        'user_id': int.parse(userID),
-      };
-
-      debugPrint('[API] 抢红包请求数据: $data');
-
-      // 尝试两个可能的API端点
-      try {
-        return await _post('/chat/redpacket/grab/wallet', data: data);
-      } catch (e) {
-        debugPrint('[API] 第一个抢红包API端点失败，尝试备用端点: $e');
-        return await _post('/chat/redpacket/grab', data: data);
-      }
-    } catch (e) {
-      debugPrint('[API] 抢红包异常: $e');
-      return {'success': false, 'msg': '抢红包失败: $e'};
-    }
-  }
-
-  // 获取朋友圈动态
-  static Future<Map<String, dynamic>> getMoments({int page = 1, int pageSize = 10}) async {
-    return await _get('/moments', queryParams: {
-      'page': page.toString(),
-      'page_size': pageSize.toString(),
-    });
-  }
-
-  // 发布朋友圈动态
-  static Future<Map<String, dynamic>> postMoment(String content, List<String> images) async {
-    return await _post('/moments/post', data: {
-      'content': content,
-      'images': images,
-    });
-  }
-
-  // 点赞朋友圈动态
-  static Future<Map<String, dynamic>> likeMoment(int momentId) async {
-    return await _post('/moments/like/$momentId');
-  }
-
-  // 评论朋友圈动态
-  static Future<Map<String, dynamic>> commentMoment(int momentId, String content) async {
-    return await _post('/moments/comment/$momentId', data: {
-      'content': content,
-    });
-  }
-
-  // WebRTC相关API
-
-  // 发送WebRTC信令
-  static Future<Map<String, dynamic>> sendSignal({
-    required String fromId,
-    required String toId,
-    required String type,
-    required String signal,
-    required String callType, // 'voice' 或 'video'
-  }) async {
-    debugPrint('[API] 发送WebRTC信令: 发送者=$fromId, 接收者=$toId, 类型=$type');
-
-    try {
-      final response = await _post('/webrtc/signal', data: {
-        'from': fromId,
-        'to': toId,
-        'type': type,
-        'signal': signal,
-        'call_type': callType,
-      });
-
-      return response;
-    } catch (e) {
-      debugPrint('[API] 发送WebRTC信令异常: $e');
-      return {'success': false, 'msg': '发送信令失败: $e'};
-    }
-  }
-
-  // 开始WebRTC语音通话
-  static Future<Map<String, dynamic>> startVoiceCallWebRTC({
-    required String fromId,
-    required String toId,
-  }) async {
-    debugPrint('[API] 开始WebRTC语音通话: 发起者=$fromId, 接收者=$toId');
-
-    try {
-      final response = await _post('/webrtc/voice/start', data: {
-        'caller_id': int.parse(fromId),
-        'receiver_id': int.parse(toId),
-      });
-
-      return response;
-    } catch (e) {
-      debugPrint('[API] 开始WebRTC语音通话异常: $e');
-      return {'success': false, 'msg': '开始语音通话失败: $e'};
-    }
-  }
-
-  // 结束WebRTC语音通话
-  static Future<Map<String, dynamic>> endVoiceCallWebRTC({
-    required String callId,
-  }) async {
-    debugPrint('[API] 结束WebRTC语音通话: 通话ID=$callId');
-
-    try {
-      final response = await _post('/webrtc/voice/end', data: {
-        'call_id': int.parse(callId),
-      });
-
-      return response;
-    } catch (e) {
-      debugPrint('[API] 结束WebRTC语音通话异常: $e');
-      return {'success': false, 'msg': '结束语音通话失败: $e'};
-    }
-  }
-
-  // 接受WebRTC语音通话
-  static Future<Map<String, dynamic>> acceptVoiceCallWebRTC({
-    required String callId,
-  }) async {
-    debugPrint('[API] 接受WebRTC语音通话: 通话ID=$callId');
-
-    try {
-      final response = await _post('/webrtc/voice/accept', data: {
-        'call_id': int.parse(callId),
-      });
-
-      return response;
-    } catch (e) {
-      debugPrint('[API] 接受WebRTC语音通话异常: $e');
-      return {'success': false, 'msg': '接受语音通话失败: $e'};
-    }
-  }
-
-  // 拒绝WebRTC语音通话
-  static Future<Map<String, dynamic>> rejectVoiceCallWebRTC({
-    required String callId,
-  }) async {
-    debugPrint('[API] 拒绝WebRTC语音通话: 通话ID=$callId');
-
-    try {
-      final response = await _post('/webrtc/voice/reject', data: {
-        'call_id': int.parse(callId),
-      });
-
-      return response;
-    } catch (e) {
-      debugPrint('[API] 拒绝WebRTC语音通话异常: $e');
-      return {'success': false, 'msg': '拒绝语音通话失败: $e'};
-    }
-  }
-
-  // 开始WebRTC视频通话
-  static Future<Map<String, dynamic>> startVideoCallWebRTC({
-    required String fromId,
-    required String toId,
-  }) async {
-    debugPrint('[API] 开始WebRTC视频通话: 发起者=$fromId, 接收者=$toId');
-
-    try {
-      final response = await _post('/webrtc/video/start', data: {
-        'caller_id': int.parse(fromId),
-        'receiver_id': int.parse(toId),
-      });
-
-      return response;
-    } catch (e) {
-      debugPrint('[API] 开始WebRTC视频通话异常: $e');
-      return {'success': false, 'msg': '开始视频通话失败: $e'};
-    }
-  }
-
-  // 结束WebRTC视频通话
-  static Future<Map<String, dynamic>> endVideoCallWebRTC({
-    required String callId,
-  }) async {
-    debugPrint('[API] 结束WebRTC视频通话: 通话ID=$callId');
-
-    try {
-      final response = await _post('/webrtc/video/end', data: {
-        'call_id': int.parse(callId),
-      });
-
-      return response;
-    } catch (e) {
-      debugPrint('[API] 结束WebRTC视频通话异常: $e');
-      return {'success': false, 'msg': '结束视频通话失败: $e'};
-    }
-  }
-
-  // 接受WebRTC视频通话
-  static Future<Map<String, dynamic>> acceptVideoCallWebRTC({
-    required String callId,
-  }) async {
-    debugPrint('[API] 接受WebRTC视频通话: 通话ID=$callId');
-
-    try {
-      final response = await _post('/webrtc/video/accept', data: {
-        'call_id': int.parse(callId),
-      });
-
-      return response;
-    } catch (e) {
-      debugPrint('[API] 接受WebRTC视频通话异常: $e');
-      return {'success': false, 'msg': '接受视频通话失败: $e'};
-    }
-  }
-
-  // 拒绝WebRTC视频通话
-  static Future<Map<String, dynamic>> rejectVideoCallWebRTC({
-    required String callId,
-  }) async {
-    debugPrint('[API] 拒绝WebRTC视频通话: 通话ID=$callId');
-
-    try {
-      final response = await _post('/webrtc/video/reject', data: {
-        'call_id': int.parse(callId),
-      });
-
-      return response;
-    } catch (e) {
-      debugPrint('[API] 拒绝WebRTC视频通话异常: $e');
-      return {'success': false, 'msg': '拒绝视频通话失败: $e'};
-    }
-  }
-
-  // 获取WebRTC通话历史
-  static Future<Map<String, dynamic>> getCallHistoryWebRTC({String type = 'all'}) async {
-    debugPrint('[API] 获取WebRTC通话历史: 类型=$type');
-
-    try {
-      final response = await _get('/webrtc/history', queryParams: {
-        'type': type,
-      });
-
-      return response;
-    } catch (e) {
-      debugPrint('[API] 获取WebRTC通话历史异常: $e');
-      return {'success': false, 'msg': '获取通话历史失败: $e'};
-    }
-  }
-
-  // 获取与特定用户的聊天消息
-  static Future<Map<String, dynamic>> getMessagesByUser({
-    required String userId,
-    required String targetId,
-    int page = 1,
-    int pageSize = 50,
-  }) async {
-    debugPrint('[API] 获取聊天消息: userId=$userId, targetId=$targetId');
-
-    try {
-      final result = await _get('/chat/messages', queryParams: {
-        'user_id': userId,
-        'target_id': targetId,
-        'page': page.toString(),
-        'page_size': pageSize.toString(),
-      });
-
-      // 打印响应结果
-      debugPrint('[API] 获取聊天消息响应: success=${result['success']}, msg=${result['msg']}');
-      if (result['success'] == true) {
-        debugPrint('[API] 获取到 ${(result['data'] as List?)?.length ?? 0} 条消息');
-      }
-
-      return result;
-    } catch (e) {
-      debugPrint('[API] 获取聊天消息异常: $e');
-      return {'success': false, 'msg': '获取消息失败: $e'};
-    }
-  }
-
-  // 发送消息
-  static Future<Map<String, dynamic>> sendMessage({
-    required String fromId,
-    required String toId,
-    required String content,
-    String type = 'text',
-  }) async {
-    debugPrint('[API] 发送消息: 发送者=$fromId, 接收者=$toId, 类型=$type');
-
-    try {
-      final data = {
-        'from_id': fromId,
-        'to_id': toId,
-        'content': content,
-        'type': type,
-      };
-
-      if (type != 'text') {
-        debugPrint('[API] 发送非文本消息: $type, 内容=$content');
-      }
-
-      final response = await _post('/chat/send', data: data);
-      debugPrint('[API] 发送消息响应: $response');
-      return response;
-    } catch (e) {
-      debugPrint('[API] 发送消息异常: $e');
-      return {'success': false, 'msg': '发送消息失败: $e'};
-    }
   }
 }

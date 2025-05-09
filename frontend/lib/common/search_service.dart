@@ -81,7 +81,8 @@ class SearchService {
     // 搜索好友和群组
     final result = await Api.searchUsers(
       keyword: keyword,
-      currentUserId: userId.toString(),
+      page: 1,
+      pageSize: 20,
     );
 
     return result;
@@ -99,7 +100,8 @@ class SearchService {
     // 搜索好友
     final result = await Api.searchUsers(
       keyword: keyword,
-      currentUserId: userId.toString(),
+      page: 1,
+      pageSize: 20,
     );
 
     return result;

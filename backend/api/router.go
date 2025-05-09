@@ -90,6 +90,9 @@ func SetupRouter() *gin.Engine {
 		// 语音和视频通话相关
 		routes.SetupCallRoutes(r)
 
+		// 语音消息相关
+		routes.RegisterVoiceMessageRoutes(auth)
+
 		// 核心功能保留，移除非核心功能
 	}
 

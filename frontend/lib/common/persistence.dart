@@ -12,7 +12,7 @@ class UserInfo {
   final String? avatar;
   final String? email;
   final String? phone;
-  final dynamic gender; // 可以是int或String
+  final dynamic gender; // ???int?String
   final String? generatedEmail;
   final String? token; // ??token??
 
@@ -107,8 +107,14 @@ class Persistence {
   static String? _cachedToken;
 
   static String? getToken() {
-    debugPrint('[Persistence] ??token????: $_cachedToken');
+    debugPrint('[Persistence] 获取token缓存值: $_cachedToken');
     return _cachedToken;
+  }
+
+  /// 检查用户是否已登录
+  static bool isLoggedIn() {
+    final token = getToken();
+    return token != null && token.isNotEmpty;
   }
 
   // ????token????????
@@ -395,6 +401,42 @@ class Persistence {
           await prefs.remove(key);
         }
       }
+    }
+  }
+
+  // ??????????
+  static Future<void> setString(String key, String value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(key, value);
+      debugPrint('[Persistence] ?????: $key');
+    } catch (e) {
+      debugPrint('[Persistence] ???????: $e');
+    }
+  }
+
+  // ??????????
+  static Future<String?> getString(String key) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final value = prefs.getString(key);
+      return value;
+    } catch (e) {
+      debugPrint('[Persistence] ???????: $e');
+      return null;
+    }
+  }
+
+  // ????????????????????????
+  static String? getStringSync(String key) {
+    try {
+      // ?????????????????????
+      // ????????????getString??
+      debugPrint('[Persistence] ????????????????????????');
+      return null;
+    } catch (e) {
+      debugPrint('[Persistence] ?????????: $e');
+      return null;
     }
   }
 }

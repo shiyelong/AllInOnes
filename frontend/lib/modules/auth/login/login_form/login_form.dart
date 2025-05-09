@@ -6,6 +6,7 @@ import 'package:frontend/modules/auth/login/login_form/login_form_service.dart';
 import 'package:frontend/common/theme.dart';
 import 'package:frontend/common/animations.dart';
 import 'package:frontend/common/recent_accounts.dart';
+import 'package:frontend/common/websocket_manager.dart';
 
 class LoginForm extends StatefulWidget {
   const LoginForm({Key? key}) : super(key: key);
@@ -370,6 +371,16 @@ class LoginFormState extends State<LoginForm> with SingleTickerProviderStateMixi
       debugPrint('[Login] autoLogin=$autoLogin');
 
       await _savePrefs();
+
+      // 初始化WebSocket连接
+      try {
+        debugPrint('[Login] 初始化WebSocket连接');
+        await WebSocketManager().initialize();
+        debugPrint('[Login] WebSocket连接初始化成功');
+      } catch (e) {
+        debugPrint('[Login][Error] 初始化WebSocket连接失败: $e');
+        // 连接失败不影响登录流程
+      }
 
       if (mounted) {
         // 显示成功状态（不使用弹窗）

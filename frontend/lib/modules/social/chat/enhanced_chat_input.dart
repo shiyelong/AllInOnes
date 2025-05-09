@@ -2,14 +2,12 @@ import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
-import 'emoji_picker.dart';
-import 'location_picker.dart';
-import 'image_picker.dart' as custom_picker;
 import '../../../common/theme.dart';
 import '../../../common/theme_manager.dart';
 import '../../../common/persistence.dart';
-import '../call/voice_call_page.dart';
-import '../call/video_call_page.dart';
+import '../../../common/voice_recorder.dart';
+import '../../../common/api.dart';
+import '../../../modules/chat/video_call/enhanced_video_call_page.dart';
 
 class EnhancedChatInput extends StatefulWidget {
   final void Function(String text)? onSendText;
@@ -22,6 +20,7 @@ class EnhancedChatInput extends StatefulWidget {
   final void Function(double amount, String greeting)? onSendRedPacket;
   final void Function(double latitude, double longitude, String address)? onSendLocation;
   final void Function(double latitude, double longitude, String address, int duration)? onSendLiveLocation;
+  final void Function(String filePath, int duration)? onSendVoiceMessage;
 
   // 添加聊天对象信息，用于语音/视频通话
   final String? targetId;
@@ -40,6 +39,7 @@ class EnhancedChatInput extends StatefulWidget {
     this.onSendRedPacket,
     this.onSendLocation,
     this.onSendLiveLocation,
+    this.onSendVoiceMessage,
     this.targetId,
     this.targetName,
     this.targetAvatar,
@@ -54,6 +54,11 @@ class _EnhancedChatInputState extends State<EnhancedChatInput> {
   bool _showEmoji = false;
   bool _showMoreOptions = false;
   bool _isRecording = false;
+  int _recordDuration = 0;
+  bool _isRecordingCancelled = false;
+
+  // 录音开始位置
+  Offset? _recordStartPosition;
 
   void _toggleEmoji() {
     setState(() {
@@ -98,8 +103,8 @@ class _EnhancedChatInputState extends State<EnhancedChatInput> {
 
   Future<void> _pickImage() async {
     try {
-      // 显示选择对话框：拍照或从相册选择
-      final XFile? image = await custom_picker.showImageSourceDialog(context);
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
 
       if (image != null && widget.onSendImage != null) {
         widget.onSendImage!(File(image.path), image.path);
@@ -114,7 +119,8 @@ class _EnhancedChatInputState extends State<EnhancedChatInput> {
 
   Future<void> _takePhoto() async {
     try {
-      final XFile? image = await custom_picker.takePhoto(context: context);
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(source: ImageSource.camera);
 
       if (image != null && widget.onSendImage != null) {
         widget.onSendImage!(File(image.path), image.path);
@@ -262,16 +268,17 @@ class _EnhancedChatInputState extends State<EnhancedChatInput> {
           SnackBar(content: Text('正在发起语音通话...'), backgroundColor: Colors.green),
         );
 
-        // 导航到语音通话页面
+        // 导航到增强版语音通话页面
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => VoiceCallPage(
-              userId: userInfo.id.toString(),
-              targetId: widget.targetId ?? '0',
-              targetName: widget.targetName ?? '未知用户',
-              targetAvatar: widget.targetAvatar ?? '',
-              isIncoming: false,
+            builder: (context) => EnhancedVideoCallPage(
+              userId: userInfo.id,
+              peerId: int.parse(widget.targetId ?? '0'),
+              peerName: widget.targetName ?? '未知用户',
+              peerAvatar: widget.targetAvatar ?? '',
+              isOutgoing: true,
+              callType: 'audio',
             ),
           ),
         );
@@ -305,16 +312,17 @@ class _EnhancedChatInputState extends State<EnhancedChatInput> {
           SnackBar(content: Text('正在发起视频通话...'), backgroundColor: Colors.green),
         );
 
-        // 导航到视频通话页面
+        // 导航到增强版视频通话页面
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => VideoCallPage(
-              userId: userInfo.id.toString(),
-              targetId: widget.targetId ?? '0',
-              targetName: widget.targetName ?? '未知用户',
-              targetAvatar: widget.targetAvatar ?? '',
-              isIncoming: false,
+            builder: (context) => EnhancedVideoCallPage(
+              userId: userInfo.id,
+              peerId: int.parse(widget.targetId ?? '0'),
+              peerName: widget.targetName ?? '未知用户',
+              peerAvatar: widget.targetAvatar ?? '',
+              isOutgoing: true,
+              callType: 'video',
             ),
           ),
         );
@@ -327,40 +335,14 @@ class _EnhancedChatInputState extends State<EnhancedChatInput> {
   }
 
   void _showLocationPicker() {
-    if (widget.onSendLocation == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('位置分享功能开发中'), backgroundColor: Colors.orange),
-      );
-      return;
-    }
-
-    // 显示位置选择对话框
-    showDialog(
-      context: context,
-      builder: (context) => LocationPickerDialog(
-        onLocationSelected: (latitude, longitude, address) {
-          widget.onSendLocation!(latitude, longitude, address);
-        },
-      ),
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('位置分享功能开发中'), backgroundColor: Colors.orange),
     );
   }
 
   void _showLiveLocationPicker() {
-    if (widget.onSendLiveLocation == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('实时位置分享功能开发中'), backgroundColor: Colors.orange),
-      );
-      return;
-    }
-
-    // 显示实时位置分享对话框
-    showDialog(
-      context: context,
-      builder: (context) => LiveLocationSharingDialog(
-        onLiveLocationSharing: (latitude, longitude, address, duration) {
-          widget.onSendLiveLocation!(latitude, longitude, address, duration);
-        },
-      ),
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('实时位置分享功能开发中'), backgroundColor: Colors.orange),
     );
   }
 
@@ -401,82 +383,260 @@ class _EnhancedChatInputState extends State<EnhancedChatInput> {
   }
 
   @override
+  void initState() {
+    super.initState();
+
+    // 监听录音状态
+    VoiceRecorder().addRecordingListener(_onRecordingStateChanged);
+  }
+
+  @override
+  void dispose() {
+    // 移除录音状态监听器
+    VoiceRecorder().removeRecordingListener(_onRecordingStateChanged);
+
+    super.dispose();
+  }
+
+  // 录音状态变化回调
+  void _onRecordingStateChanged(bool isRecording, int duration) {
+    setState(() {
+      _isRecording = isRecording;
+      _recordDuration = duration;
+    });
+  }
+
+  // 开始录音
+  Future<void> _startRecording() async {
+    // 请求麦克风权限
+    final hasPermission = await VoiceRecorder().requestPermission();
+    if (!hasPermission) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('没有麦克风权限'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    // 开始录音
+    final result = await VoiceRecorder().startRecording();
+    if (!result) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('开始录音失败'), backgroundColor: Colors.red),
+      );
+    }
+
+    setState(() {
+      _isRecordingCancelled = false;
+    });
+  }
+
+  // 停止录音
+  Future<void> _stopRecording() async {
+    if (_isRecordingCancelled) {
+      // 如果录音已取消，不发送
+      await VoiceRecorder().cancelRecording();
+      return;
+    }
+
+    // 停止录音
+    final result = await VoiceRecorder().stopRecording();
+
+    if (result['success'] == true) {
+      final filePath = result['path'];
+      final duration = result['duration'];
+
+      if (widget.onSendVoiceMessage != null) {
+        widget.onSendVoiceMessage!(filePath, duration);
+      } else {
+        // 直接上传语音消息
+        try {
+          final response = await Api.uploadVoiceMessage(
+            filePath: filePath,
+            duration: duration,
+          );
+
+          if (response['success'] == true) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('语音消息已发送'), backgroundColor: Colors.green),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('发送语音消息失败: ${response['msg']}'), backgroundColor: Colors.red),
+            );
+          }
+        } catch (e) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('发送语音消息失败: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('录音失败: ${result['msg']}'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  // 取消录音
+  void _cancelRecording() {
+    setState(() {
+      _isRecordingCancelled = true;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = ThemeManager.currentTheme;
 
     return Column(
       children: [
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          decoration: BoxDecoration(
-            color: theme.isDark ? Color(0xFF2D2D2D) : Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 5,
-                offset: Offset(0, -1),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              // 表情按钮
-              IconButton(
-                icon: Icon(
-                  _showEmoji ? Icons.keyboard : Icons.emoji_emotions_outlined,
-                  color: _showEmoji ? theme.primaryColor : theme.isDark ? Colors.grey[400] : Colors.grey[600],
-                  size: 24,
-                ),
-                onPressed: _toggleEmoji,
-              ),
-              // 更多选项按钮
-              IconButton(
-                icon: Icon(
-                  _showMoreOptions ? Icons.close : Icons.add_circle_outline,
-                  color: _showMoreOptions ? theme.primaryColor : theme.isDark ? Colors.grey[400] : Colors.grey[600],
-                  size: 24,
-                ),
-                onPressed: _toggleMoreOptions,
-              ),
-              // 输入框
-              Expanded(
-                child: Container(
-                  margin: EdgeInsets.symmetric(horizontal: 4),
-                  decoration: BoxDecoration(
-                    color: theme.isDark ? Colors.grey[800] : Colors.grey[100],
-                    borderRadius: BorderRadius.circular(20),
+        Stack(
+          children: [
+            // 输入区域
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              decoration: BoxDecoration(
+                color: theme.isDark ? Color(0xFF2D2D2D) : Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 5,
+                    offset: Offset(0, -1),
                   ),
-                  child: TextField(
-                    controller: _controller,
-                    decoration: InputDecoration(
-                      hintText: '输入消息...',
-                      hintStyle: TextStyle(
-                        color: theme.isDark ? Colors.grey[400] : Colors.grey[600],
+                ],
+              ),
+              child: Row(
+                children: [
+                  // 表情按钮
+                  IconButton(
+                    icon: Icon(
+                      _showEmoji ? Icons.keyboard : Icons.emoji_emotions_outlined,
+                      color: _showEmoji ? theme.primaryColor : theme.isDark ? Colors.grey[400] : Colors.grey[600],
+                      size: 24,
+                    ),
+                    onPressed: _toggleEmoji,
+                  ),
+                  // 更多选项按钮
+                  IconButton(
+                    icon: Icon(
+                      _showMoreOptions ? Icons.close : Icons.add_circle_outline,
+                      color: _showMoreOptions ? theme.primaryColor : theme.isDark ? Colors.grey[400] : Colors.grey[600],
+                      size: 24,
+                    ),
+                    onPressed: _toggleMoreOptions,
+                  ),
+                  // 输入框
+                  Expanded(
+                    child: Container(
+                      margin: EdgeInsets.symmetric(horizontal: 4),
+                      decoration: BoxDecoration(
+                        color: theme.isDark ? Colors.grey[800] : Colors.grey[100],
+                        borderRadius: BorderRadius.circular(20),
                       ),
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      child: Row(
+                        children: [
+                          // 语音按钮
+                          GestureDetector(
+                            onLongPress: () {
+                              _recordStartPosition = Offset(0, 0);
+                              _startRecording();
+                            },
+                            onLongPressEnd: (details) {
+                              if (_recordStartPosition != null) {
+                                final distance = (_recordStartPosition! - details.globalPosition).distance;
+                                if (distance > 100) {
+                                  // 如果移动距离超过100，取消录音
+                                  _cancelRecording();
+                                }
+                              }
+                              _stopRecording();
+                            },
+                            onLongPressMoveUpdate: (details) {
+                              if (_recordStartPosition != null) {
+                                final distance = (_recordStartPosition! - details.globalPosition).distance;
+                                if (distance > 100) {
+                                  // 如果移动距离超过100，显示取消提示
+                                  if (!_isRecordingCancelled) {
+                                    setState(() {
+                                      _isRecordingCancelled = true;
+                                    });
+                                  }
+                                } else {
+                                  if (_isRecordingCancelled) {
+                                    setState(() {
+                                      _isRecordingCancelled = false;
+                                    });
+                                  }
+                                }
+                              }
+                            },
+                            child: Container(
+                              padding: EdgeInsets.symmetric(horizontal: 8),
+                              child: Icon(
+                                Icons.mic,
+                                color: _isRecording
+                                    ? (_isRecordingCancelled ? Colors.red : theme.primaryColor)
+                                    : theme.isDark ? Colors.grey[400] : Colors.grey[600],
+                                size: 24,
+                              ),
+                            ),
+                          ),
+                          // 文本输入
+                          Expanded(
+                            child: TextField(
+                              controller: _controller,
+                              decoration: InputDecoration(
+                                hintText: _isRecording
+                                    ? _isRecordingCancelled
+                                        ? '松开手指取消录音'
+                                        : '正在录音: ${_recordDuration}s'
+                                    : '输入消息...',
+                                hintStyle: TextStyle(
+                                  color: _isRecording
+                                      ? (_isRecordingCancelled ? Colors.red : theme.primaryColor)
+                                      : (theme.isDark ? Colors.grey[400] : Colors.grey[600]),
+                                ),
+                                border: InputBorder.none,
+                                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              ),
+                              style: TextStyle(
+                                color: theme.isDark ? Colors.white : Colors.black,
+                              ),
+                              maxLines: 3,
+                              minLines: 1,
+                              textInputAction: TextInputAction.send,
+                              onSubmitted: (_) => _sendText(),
+                              enabled: !_isRecording,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    style: TextStyle(
-                      color: theme.isDark ? Colors.white : Colors.black,
+                  ),
+                  // 发送按钮
+                  IconButton(
+                    icon: Icon(
+                      Icons.send,
+                      color: theme.primaryColor,
+                      size: 24,
                     ),
-                    maxLines: 3,
-                    minLines: 1,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) => _sendText(),
+                    onPressed: _sendText,
+                  ),
+                ],
+              ),
+            ),
+
+            // 录音提示
+            if (_isRecording)
+              Positioned.fill(
+                child: GestureDetector(
+                  onTap: () {}, // 拦截点击事件
+                  child: Container(
+                    color: Colors.transparent,
                   ),
                 ),
               ),
-              // 发送按钮
-              IconButton(
-                icon: Icon(
-                  Icons.send,
-                  color: theme.primaryColor,
-                  size: 24,
-                ),
-                onPressed: _sendText,
-              ),
-            ],
-          ),
+          ],
         ),
         // 表情选择器
         if (_showEmoji)
@@ -491,19 +651,44 @@ class _EnhancedChatInputState extends State<EnhancedChatInput> {
                 ),
               ),
             ),
-            child: EmojiPicker(
-              onSelected: (emoji) {
-                // 始终将表情插入到输入框
-                final currentText = _controller.text;
-                final selection = _controller.selection;
-                final newText = currentText.replaceRange(
-                  selection.start,
-                  selection.end,
-                  emoji,
-                );
-                _controller.text = newText;
-                _controller.selection = TextSelection.collapsed(
-                  offset: selection.baseOffset + emoji.length,
+            child: GridView.builder(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 8,
+                childAspectRatio: 1.0,
+              ),
+              itemCount: 50, // 简化版，实际应该使用真实表情列表
+              itemBuilder: (context, index) {
+                // 简单的表情符号列表
+                final emojis = ['😀', '😁', '😂', '🤣', '😃', '😄', '😅', '😆', '😉', '😊',
+                               '😋', '😎', '😍', '😘', '🥰', '😗', '😙', '😚', '🙂', '🤗',
+                               '🤩', '🤔', '🤨', '😐', '😑', '😶', '🙄', '😏', '😣', '😥',
+                               '😮', '🤐', '😯', '😪', '😫', '🥱', '😴', '😌', '😛', '😜',
+                               '😝', '🤤', '😒', '😓', '😔', '😕', '🙃', '🤑', '😲', '☹️'];
+                return InkWell(
+                  onTap: () {
+                    // 始终将表情插入到输入框
+                    final currentText = _controller.text;
+                    final selection = _controller.selection;
+                    final emoji = emojis[index];
+                    final newText = currentText.replaceRange(
+                      selection.start,
+                      selection.end,
+                      emoji,
+                    );
+                    _controller.text = newText;
+                    _controller.selection = TextSelection.collapsed(
+                      offset: selection.baseOffset + emoji.length,
+                    );
+                  },
+                  child: Container(
+                    padding: EdgeInsets.all(8),
+                    child: Center(
+                      child: Text(
+                        emojis[index],
+                        style: TextStyle(fontSize: 24),
+                      ),
+                    ),
+                  ),
                 );
               },
             ),

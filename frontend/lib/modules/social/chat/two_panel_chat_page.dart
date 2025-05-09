@@ -210,14 +210,27 @@ class _TwoPanelChatPageState extends State<TwoPanelChatPage> {
 
   // 选择聊天
   Future<void> _selectChat(int idx) async {
+    // 获取当前选中的聊天ID和新选中的聊天ID
+    final currentChatId = _selectedChatIdx != null ? _recentChats[_selectedChatIdx!]['target_id'] : null;
+    final newChatId = _recentChats[idx]['target_id'];
+
+    // 如果切换到不同的聊天，先清除本地消息缓存
+    if (currentChatId != null && currentChatId != newChatId) {
+      debugPrint('[TwoPanelChatPage] 切换聊天: 从 $currentChatId 到 $newChatId');
+
+      // 清除内存中的消息
+      setState(() {
+        _messages = [];
+        _loadingMessages = true;
+        _messagesError = '';
+      });
+    }
+
     setState(() {
       _selectedChatIdx = idx;
       _loadingMessages = true;
       _messagesError = '';
-      _messages = [];
     });
-
-    await _loadMessages(idx);
 
     // 查找该聊天对应的好友
     final chatTargetId = _recentChats[idx]['target_id'];
@@ -228,6 +241,9 @@ class _TwoPanelChatPageState extends State<TwoPanelChatPage> {
         _selectedFriendIdx = friendIdx;
       });
     }
+
+    // 加载消息放在最后，确保UI状态已经更新
+    await _loadMessages(idx);
   }
 
   // 加载消息
@@ -685,129 +701,13 @@ class _TwoPanelChatPageState extends State<TwoPanelChatPage> {
                             ),
                           )
                         : ChatDetail(
-                            chat: _recentChats[_selectedChatIdx!],
-                            messages: _messages,
-                            onSendText: _sendText,
-                            onSendImage: (image, path) async {
-                              if (_selectedChatIdx == null) return;
+                            targetId: _recentChats[_selectedChatIdx!]['target_id'].toString(),
+                            targetName: _recentChats[_selectedChatIdx!]['target_name'] ?? '未知用户',
+                            targetAvatar: _recentChats[_selectedChatIdx!]['target_avatar'],
 
-                              final chatId = _recentChats[_selectedChatIdx!]['target_id'];
-                              final userId = Persistence.getUserInfo()?.id ?? 0;
 
-                              // 先添加一条本地消息，提高响应速度
-                              setState(() {
-                                _messages = List<Map<String, dynamic>>.from(_messages)
-                                  ..add({
-                                    "from_id": userId,
-                                    "to_id": chatId,
-                                    "content": path, // 临时使用本地路径
-                                    "type": "image",
-                                    "created_at": DateTime.now().millisecondsSinceEpoch ~/ 1000,
-                                    "status": 0, // 发送中
-                                  });
-                              });
 
-                              try {
-                                // 这里应该上传图片到服务器，获取URL后发送消息
-                                // 目前简化处理，直接发送成功提示
-                                await Future.delayed(Duration(seconds: 1)); // 模拟网络延迟
 
-                                // 更新消息状态为已发送
-                                setState(() {
-                                  final index = _messages.indexWhere((msg) =>
-                                    msg['from_id'] == userId &&
-                                    msg['content'] == path &&
-                                    msg['status'] == 0
-                                  );
-
-                                  if (index != -1) {
-                                    _messages[index]['status'] = 1; // 已发送
-                                  }
-                                });
-
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('图片发送成功'), backgroundColor: Colors.green),
-                                );
-                              } catch (e) {
-                                print('发送图片失败: $e');
-
-                                // 更新消息状态为发送失败
-                                setState(() {
-                                  final index = _messages.indexWhere((msg) =>
-                                    msg['from_id'] == userId &&
-                                    msg['content'] == path &&
-                                    msg['status'] == 0
-                                  );
-
-                                  if (index != -1) {
-                                    _messages[index]['status'] = 2; // 发送失败
-                                  }
-                                });
-
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('发送图片失败: $e'), backgroundColor: Colors.red),
-                                );
-                              }
-                            },
-                            onSendEmoji: (emoji) async {
-                              if (_selectedChatIdx == null) return;
-
-                              final chatId = _recentChats[_selectedChatIdx!]['target_id'];
-                              final userId = Persistence.getUserInfo()?.id ?? 0;
-
-                              // 先添加一条本地消息，提高响应速度
-                              setState(() {
-                                _messages = List<Map<String, dynamic>>.from(_messages)
-                                  ..add({
-                                    "from_id": userId,
-                                    "to_id": chatId,
-                                    "content": emoji,
-                                    "type": "emoji",
-                                    "created_at": DateTime.now().millisecondsSinceEpoch ~/ 1000,
-                                    "status": 0, // 发送中
-                                  });
-                              });
-
-                              try {
-                                // 这里应该调用API发送表情
-                                // 目前简化处理，直接发送成功提示
-                                await Future.delayed(Duration(milliseconds: 500)); // 模拟网络延迟
-
-                                // 更新消息状态为已发送
-                                setState(() {
-                                  final index = _messages.indexWhere((msg) =>
-                                    msg['from_id'] == userId &&
-                                    msg['content'] == emoji &&
-                                    msg['type'] == 'emoji' &&
-                                    msg['status'] == 0
-                                  );
-
-                                  if (index != -1) {
-                                    _messages[index]['status'] = 1; // 已发送
-                                  }
-                                });
-                              } catch (e) {
-                                print('发送表情失败: $e');
-
-                                // 更新消息状态为发送失败
-                                setState(() {
-                                  final index = _messages.indexWhere((msg) =>
-                                    msg['from_id'] == userId &&
-                                    msg['content'] == emoji &&
-                                    msg['type'] == 'emoji' &&
-                                    msg['status'] == 0
-                                  );
-
-                                  if (index != -1) {
-                                    _messages[index]['status'] = 2; // 发送失败
-                                  }
-                                });
-
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('发送表情失败: $e'), backgroundColor: Colors.red),
-                                );
-                              }
-                            },
                           ),
           ),
         ),

@@ -8,6 +8,8 @@ list(APPEND FLUTTER_PLUGIN_LIST
   desktop_window
   emoji_picker_flutter
   file_selector_linux
+  open_file_linux
+  record_linux
   screen_retriever
   url_launcher_linux
   window_manager

@@ -7,15 +7,19 @@ import 'dart:async';
 class VideoCallPage extends StatefulWidget {
   final String targetId;
   final String targetName;
-  final String targetAvatar;
+  final String? targetAvatar;
   final bool isIncoming;
-  
+  final VoidCallback onCallEnded;
+  final String? callId;
+
   const VideoCallPage({
     Key? key,
     required this.targetId,
     required this.targetName,
-    required this.targetAvatar,
+    this.targetAvatar,
     this.isIncoming = false,
+    required this.onCallEnded,
+    this.callId,
   }) : super(key: key);
 
   @override
@@ -30,11 +34,11 @@ class _VideoCallPageState extends State<VideoCallPage> {
   String _callStatus = '正在连接...';
   Timer? _callTimer;
   int _callDuration = 0;
-  
+
   @override
   void initState() {
     super.initState();
-    
+
     if (!widget.isIncoming) {
       _initiateCall();
     } else {
@@ -43,31 +47,31 @@ class _VideoCallPageState extends State<VideoCallPage> {
       });
     }
   }
-  
+
   @override
   void dispose() {
     _callTimer?.cancel();
     super.dispose();
   }
-  
+
   Future<void> _initiateCall() async {
     final userId = Persistence.getUserInfo()?.id;
     if (userId == null) {
       _handleCallError('未获取到用户信息');
       return;
     }
-    
+
     try {
-      final response = await Api.startVideoCall(
-        fromId: userId.toString(),
-        toId: widget.targetId,
+      // 使用新的API方法
+      final response = await Api.startVideoCallWithId(
+        targetId: widget.targetId,
       );
-      
+
       if (response['success'] == true) {
         setState(() {
           _callStatus = '正在呼叫...';
         });
-        
+
         // 模拟对方接听
         Future.delayed(Duration(seconds: 2), () {
           _handleCallConnected();
@@ -79,13 +83,13 @@ class _VideoCallPageState extends State<VideoCallPage> {
       _handleCallError('网络异常: $e');
     }
   }
-  
+
   void _handleCallConnected() {
     setState(() {
       _isConnected = true;
       _callStatus = '已接通';
     });
-    
+
     // 开始计时
     _callTimer = Timer.periodic(Duration(seconds: 1), (timer) {
       setState(() {
@@ -93,71 +97,73 @@ class _VideoCallPageState extends State<VideoCallPage> {
       });
     });
   }
-  
+
   void _handleCallError(String error) {
     setState(() {
       _callStatus = '呼叫失败: $error';
     });
-    
+
     // 显示错误后返回
     Future.delayed(Duration(seconds: 2), () {
       Navigator.pop(context);
     });
   }
-  
+
   void _toggleMute() {
     setState(() {
       _isMuted = !_isMuted;
     });
     // TODO: 实现实际的静音功能
   }
-  
+
   void _toggleCamera() {
     setState(() {
       _isCameraOn = !_isCameraOn;
     });
     // TODO: 实现实际的摄像头开关功能
   }
-  
+
   void _switchCamera() {
     setState(() {
       _isFrontCamera = !_isFrontCamera;
     });
     // TODO: 实现实际的摄像头切换功能
   }
-  
+
   void _endCall() async {
     final userId = Persistence.getUserInfo()?.id;
     if (userId == null) {
       Navigator.pop(context);
       return;
     }
-    
+
     try {
-      await Api.endVideoCall(
-        fromId: userId.toString(),
-        toId: widget.targetId,
+      // 使用新的API方法
+      await Api.endVideoCallWithId(
+        callId: widget.targetId,
       );
     } catch (e) {
       print('结束通话出错: $e');
     }
-    
+
+    // 调用通话结束回调
+    widget.onCallEnded();
+
     Navigator.pop(context);
   }
-  
+
   void _acceptCall() async {
     final userId = Persistence.getUserInfo()?.id;
     if (userId == null) {
       _handleCallError('未获取到用户信息');
       return;
     }
-    
+
     try {
       final response = await Api.acceptVideoCall(
-        fromId: widget.targetId,
-        toId: userId.toString(),
+        callId: widget.targetId,
       );
-      
+
       if (response['success'] == true) {
         _handleCallConnected();
       } else {
@@ -167,26 +173,26 @@ class _VideoCallPageState extends State<VideoCallPage> {
       _handleCallError('网络异常: $e');
     }
   }
-  
+
   void _rejectCall() async {
     final userId = Persistence.getUserInfo()?.id;
     if (userId == null) {
       Navigator.pop(context);
       return;
     }
-    
+
     try {
-      await Api.rejectVideoCall(
-        fromId: widget.targetId,
-        toId: userId.toString(),
+      // 使用新的API方法
+      await Api.rejectVideoCallWithId(
+        callId: widget.targetId,
       );
     } catch (e) {
       print('拒绝通话出错: $e');
     }
-    
+
     Navigator.pop(context);
   }
-  
+
   String _formatDuration(int seconds) {
     final minutes = seconds ~/ 60;
     final remainingSeconds = seconds % 60;
@@ -196,7 +202,7 @@ class _VideoCallPageState extends State<VideoCallPage> {
   @override
   Widget build(BuildContext context) {
     final theme = ThemeManager.currentTheme;
-    
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
@@ -244,7 +250,7 @@ class _VideoCallPageState extends State<VideoCallPage> {
                     ),
                   ),
                 ),
-          
+
           // 本地视频（自己）
           if (_isConnected)
             Positioned(
@@ -270,7 +276,7 @@ class _VideoCallPageState extends State<VideoCallPage> {
                       ),
               ),
             ),
-          
+
           // 通话时长
           if (_isConnected)
             Positioned(
@@ -291,7 +297,7 @@ class _VideoCallPageState extends State<VideoCallPage> {
                 ),
               ),
             ),
-          
+
           // 控制按钮
           Positioned(
             bottom: 40,
@@ -305,7 +311,7 @@ class _VideoCallPageState extends State<VideoCallPage> {
       ),
     );
   }
-  
+
   Widget _buildCallActions() {
     return Container(
       padding: EdgeInsets.symmetric(vertical: 16),
@@ -342,7 +348,7 @@ class _VideoCallPageState extends State<VideoCallPage> {
       ),
     );
   }
-  
+
   Widget _buildIncomingCallActions() {
     return Container(
       padding: EdgeInsets.symmetric(vertical: 16),
@@ -366,7 +372,7 @@ class _VideoCallPageState extends State<VideoCallPage> {
       ),
     );
   }
-  
+
   Widget _buildActionButton({
     required IconData icon,
     required String label,

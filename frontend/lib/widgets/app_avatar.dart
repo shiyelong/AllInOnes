@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import '../common/theme.dart';
 import '../common/text_sanitizer.dart';
+import '../common/api.dart';
 
 enum AvatarType { circle, rounded }
 
@@ -19,6 +20,8 @@ class AppAvatar extends StatelessWidget {
   final Widget? badge;
   final Alignment badgeAlignment;
   final String? base64Image;
+  final bool isGroup;
+  final bool isOnline;
 
   const AppAvatar({
     Key? key,
@@ -35,6 +38,8 @@ class AppAvatar extends StatelessWidget {
     this.badge,
     this.badgeAlignment = Alignment.bottomRight,
     this.base64Image,
+    this.isGroup = false,
+    this.isOnline = false,
   }) : super(key: key);
 
   @override
@@ -46,9 +51,11 @@ class AppAvatar extends StatelessWidget {
 
     // 确定背景色
     final bgColor = backgroundColor ??
-        (name != null && name!.isNotEmpty
-            ? _getColorFromName(name!)
-            : AppTheme.primaryColor);
+        (isGroup
+            ? AppTheme.primaryColor.withOpacity(0.2)
+            : (name != null && name!.isNotEmpty
+                ? _getColorFromName(name!)
+                : AppTheme.primaryColor));
 
     // 确定文本颜色
     final txtColor = textColor ?? Colors.white;
@@ -56,14 +63,49 @@ class AppAvatar extends StatelessWidget {
     // 构建头像内容
     Widget avatarContent;
     if (imageUrl != null && imageUrl!.isNotEmpty) {
+      // 确保图片URL是完整的URL
+      String processedUrl = imageUrl!;
+
+      // 处理不同类型的路径
+      if (imageUrl!.startsWith('/api/') || imageUrl!.startsWith('/uploads/')) {
+        // 相对路径，添加基础URL
+        processedUrl = Api.getFullUrl(imageUrl!);
+        debugPrint('[AppAvatar] 图片路径已转换为完整URL: $imageUrl -> $processedUrl');
+      } else if (!imageUrl!.startsWith('http://') && !imageUrl!.startsWith('https://') &&
+                !imageUrl!.startsWith('file://') && !imageUrl!.startsWith('/')) {
+        // 可能是相对路径但没有前导斜杠，添加斜杠和基础URL
+        processedUrl = Api.getFullUrl('/$imageUrl');
+        debugPrint('[AppAvatar] 图片路径已转换为完整URL(添加斜杠): $imageUrl -> $processedUrl');
+      }
+
       avatarContent = ClipRRect(
         borderRadius: borderRadius,
         child: Image.network(
-          imageUrl!,
+          processedUrl,
           width: size,
           height: size,
           fit: BoxFit.cover,
           errorBuilder: (context, error, stackTrace) {
+            debugPrint('[AppAvatar] 图片加载失败: $error, URL: $processedUrl');
+
+            // 如果加载失败，尝试使用不同的路径格式
+            if (processedUrl.contains('/api/static/')) {
+              // 尝试将 /api/static/ 替换为 /uploads/
+              final alternativeUrl = processedUrl.replaceFirst('/api/static/', '/uploads/');
+              debugPrint('[AppAvatar] 尝试替代URL: $alternativeUrl');
+
+              return Image.network(
+                alternativeUrl,
+                width: size,
+                height: size,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  debugPrint('[AppAvatar] 替代URL也加载失败: $error');
+                  return _buildNameAvatar(bgColor, txtColor, borderRadius);
+                },
+              );
+            }
+
             return _buildNameAvatar(bgColor, txtColor, borderRadius);
           },
         ),
@@ -104,20 +146,75 @@ class AppAvatar extends StatelessWidget {
       );
     }
 
-    // 添加徽章
+    // 添加徽章或在线状态或群组标识
+    List<Widget> stackChildren = [avatarContent];
+
+    // 添加在线状态指示器
+    if (isOnline && !isGroup) {
+      stackChildren.add(
+        Positioned(
+          right: 0,
+          bottom: 0,
+          child: Container(
+            width: size * 0.3,
+            height: size * 0.3,
+            decoration: BoxDecoration(
+              color: Colors.green,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                width: 2,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // 添加群组标识
+    if (isGroup && (imageUrl != null || base64Image != null)) {
+      stackChildren.add(
+        Positioned(
+          right: 0,
+          bottom: 0,
+          child: Container(
+            padding: EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              color: AppTheme.primaryColor,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                width: 1,
+              ),
+            ),
+            child: Icon(
+              Icons.group,
+              size: size * 0.25,
+              color: Colors.white,
+            ),
+          ),
+        ),
+      );
+    }
+
+    // 添加自定义徽章
     if (badge != null) {
+      stackChildren.add(
+        Positioned(
+          right: badgeAlignment.x > 0 ? -4 : null,
+          left: badgeAlignment.x < 0 ? -4 : null,
+          top: badgeAlignment.y < 0 ? -4 : null,
+          bottom: badgeAlignment.y > 0 ? -4 : null,
+          child: badge!,
+        ),
+      );
+    }
+
+    // 如果有多个子元素，使用Stack
+    if (stackChildren.length > 1) {
       avatarContent = Stack(
         clipBehavior: Clip.none,
-        children: [
-          avatarContent,
-          Positioned(
-            right: badgeAlignment.x > 0 ? -4 : null,
-            left: badgeAlignment.x < 0 ? -4 : null,
-            top: badgeAlignment.y < 0 ? -4 : null,
-            bottom: badgeAlignment.y > 0 ? -4 : null,
-            child: badge!,
-          ),
-        ],
+        children: stackChildren,
       );
     }
 
@@ -143,14 +240,20 @@ class AppAvatar extends StatelessWidget {
         borderRadius: borderRadius,
       ),
       child: Center(
-        child: Text(
-          _getInitials(name ?? '?'),
-          style: TextStyle(
-            color: txtColor,
-            fontWeight: FontWeight.bold,
-            fontSize: size * 0.4,
-          ),
-        ),
+        child: isGroup
+            ? Icon(
+                Icons.group,
+                size: size * 0.5,
+                color: AppTheme.primaryColor,
+              )
+            : Text(
+                _getInitials(name ?? '?'),
+                style: TextStyle(
+                  color: txtColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: size * 0.4,
+                ),
+              ),
       ),
     );
   }

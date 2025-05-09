@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../common/theme_manager.dart';
+import '../../../pages/data_cleanup_page.dart';
 
 class SettingsPage extends StatelessWidget {
   final VoidCallback onLogout;
@@ -89,6 +90,20 @@ class SettingsPage extends StatelessWidget {
             subtitle: Text('获取帮助或提交反馈'),
             trailing: Icon(Icons.arrow_forward_ios, size: 16),
             onTap: () {/* 跳转帮助页面 */},
+          ),
+          ListTile(
+            leading: Icon(Icons.delete_sweep, color: Colors.deepOrange),
+            title: Text('完全数据清理', style: TextStyle(color: Colors.deepOrange)),
+            subtitle: Text('彻底清理所有聊天记录和应用数据'),
+            trailing: Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => DataCleanupPage(),
+                ),
+              );
+            },
           ),
           Divider(),
 

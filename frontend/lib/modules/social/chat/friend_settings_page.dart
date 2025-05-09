@@ -6,7 +6,7 @@ import 'package:frontend/widgets/app_button.dart';
 
 class FriendSettingsPage extends StatefulWidget {
   final Function()? onSettingsChanged;
-  
+
   const FriendSettingsPage({Key? key, this.onSettingsChanged}) : super(key: key);
 
   @override
@@ -16,16 +16,16 @@ class FriendSettingsPage extends StatefulWidget {
 class _FriendSettingsPageState extends State<FriendSettingsPage> {
   bool _isLoading = false;
   String? _error;
-  
+
   // 好友添加模式
   int _friendAddMode = 0; // 0=自动同意，1=需验证，2=拒绝所有
-  
+
   @override
   void initState() {
     super.initState();
     _loadSettings();
   }
-  
+
   // 加载设置
   Future<void> _loadSettings() async {
     final userId = Persistence.getUserInfo()?.id;
@@ -35,17 +35,15 @@ class _FriendSettingsPageState extends State<FriendSettingsPage> {
       });
       return;
     }
-    
+
     setState(() {
       _isLoading = true;
       _error = null;
     });
-    
+
     try {
-      final response = await Api.getFriendAddMode(
-        userId: userId.toString(),
-      );
-      
+      final response = await Api.getFriendAddMode();
+
       if (response['success'] == true) {
         setState(() {
           _friendAddMode = response['data']['mode'] ?? 0;
@@ -64,7 +62,7 @@ class _FriendSettingsPageState extends State<FriendSettingsPage> {
       });
     }
   }
-  
+
   // 保存设置
   Future<void> _saveSettings() async {
     final userId = Persistence.getUserInfo()?.id;
@@ -74,17 +72,16 @@ class _FriendSettingsPageState extends State<FriendSettingsPage> {
       );
       return;
     }
-    
+
     setState(() {
       _isLoading = true;
     });
-    
+
     try {
       final response = await Api.setFriendAddMode(
-        userId: userId.toString(),
-        mode: _friendAddMode,
+        mode: _friendAddMode.toString(),
       );
-      
+
       if (response['success'] == true) {
         // 显示成功消息
         ScaffoldMessenger.of(context).showSnackBar(
@@ -93,7 +90,7 @@ class _FriendSettingsPageState extends State<FriendSettingsPage> {
             backgroundColor: Colors.green,
           ),
         );
-        
+
         // 回调
         widget.onSettingsChanged?.call();
       } else {
@@ -112,12 +109,12 @@ class _FriendSettingsPageState extends State<FriendSettingsPage> {
         ),
       );
     }
-    
+
     setState(() {
       _isLoading = false;
     });
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -225,7 +222,7 @@ class _FriendSettingsPageState extends State<FriendSettingsPage> {
                           ],
                         ),
                       ),
-                      
+
                       // 好友管理
                       Card(
                         margin: EdgeInsets.only(bottom: 16),
@@ -276,7 +273,7 @@ class _FriendSettingsPageState extends State<FriendSettingsPage> {
                           ],
                         ),
                       ),
-                      
+
                       // 隐私设置
                       Card(
                         margin: EdgeInsets.only(bottom: 16),

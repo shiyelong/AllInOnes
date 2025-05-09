@@ -7,6 +7,9 @@ import (
 )
 
 func RegisterChatRoutes(r *gin.RouterGroup) {
+	// 创建群聊控制器实例
+	groupChatController := &controllers.GroupChatController{}
+
 	chat := r.Group("/chat")
 	{
 		// 单聊相关
@@ -14,8 +17,12 @@ func RegisterChatRoutes(r *gin.RouterGroup) {
 		chat.GET("/messages", controllers.GetMessagesByUser)
 
 		// 群聊相关
-		chat.POST("/group", controllers.GroupChat)
-		chat.GET("/group/messages", controllers.GetGroupMessages)
+		chat.POST("/group", controllers.GroupChat)                // 兼容旧接口
+		chat.GET("/group/messages", controllers.GetGroupMessages) // 兼容旧接口
+
+		// 增强版群聊API
+		chat.POST("/group/send", groupChatController.SendGroupMessage)
+		chat.GET("/group/messages/enhanced", groupChatController.GetGroupMessages)
 
 		// 聊天列表和同步
 		chat.GET("/recent", controllers.GetRecentChats)
@@ -92,6 +99,10 @@ func RegisterChatRoutes(r *gin.RouterGroup) {
 
 		// 文件上传
 		chat.POST("/upload", controllers.UploadFileEnhanced)
+
+		// 聊天记录清理
+		chat.POST("/clear/all", controllers.ClearAllUserMessages)
+		chat.POST("/clear/chat", controllers.ClearChatMessages)
 
 		// 表情包
 		emoticon := chat.Group("/emoticon")

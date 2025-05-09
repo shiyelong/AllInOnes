@@ -8,6 +8,7 @@ import 'moments/moments_page.dart';
 import 'friends/friends_page.dart';
 import 'chat/friend_requests_page.dart';
 import 'chat/friend_settings_page.dart';
+import 'chat/group/group_list_page.dart';
 import '../wallet/wallet_page.dart';
 import '../../common/theme.dart';
 import '../../widgets/app_avatar.dart';
@@ -21,6 +22,8 @@ import '../../tools/fix_chat_messages.dart';
 import '../../tools/clear_all_chat_data.dart';
 import '../../tools/reset_all_data.dart';
 import '../../tools/simple_clean_chat.dart';
+import '../social/chat/chat_cleaner_page.dart';
+import '../../pages/data_cleanup_page.dart';
 
 /// 社交主界面（包含左侧导航栏和主内容区）
 class SocialMainPage extends StatefulWidget {
@@ -103,8 +106,6 @@ class _SocialMainPageState extends State<SocialMainPage> {
 
       final response = await Api.getFriendRequests(
         userId: userId.toString(),
-        type: 'received',
-        status: 'pending',
       );
 
       if (response['success'] == true && mounted) {
@@ -193,6 +194,7 @@ class _SocialMainPageState extends State<SocialMainPage> {
   final List<List<Map<String, dynamic>>> subTabs = [
     [ // 社交
       {'icon': Icons.chat_bubble_outline, 'label': '聊天'},
+      {'icon': Icons.group, 'label': '群聊'},
       {'icon': Icons.photo_album_outlined, 'label': '朋友圈'},
       {'icon': Icons.people_outline, 'label': '好友', 'badge': true},
       {'icon': Icons.settings_outlined, 'label': '好友设置'},
@@ -596,6 +598,36 @@ class _SocialMainPageState extends State<SocialMainPage> {
                               },
                             ),
                             ListTile(
+                              leading: Icon(Icons.auto_fix_high, color: AppTheme.primaryColor),
+                              title: Text('聊天记录修复工具'),
+                              trailing: Icon(Icons.chevron_right),
+                              onTap: () {
+                                Navigator.of(ctx).pop();
+                                // 打开聊天记录清理工具页面
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ChatCleanerPage(),
+                                  ),
+                                );
+                              },
+                            ),
+                            ListTile(
+                              leading: Icon(Icons.delete_sweep, color: Colors.deepOrange),
+                              title: Text('完全数据清理', style: TextStyle(color: Colors.deepOrange)),
+                              trailing: Icon(Icons.chevron_right),
+                              onTap: () {
+                                Navigator.of(ctx).pop();
+                                // 打开完全数据清理工具页面
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => DataCleanupPage(),
+                                  ),
+                                );
+                              },
+                            ),
+                            ListTile(
                               leading: Icon(Icons.switch_account_outlined, color: AppTheme.primaryColor),
                               title: Text('切换账号'),
                               trailing: Icon(Icons.chevron_right),
@@ -969,7 +1001,7 @@ class _SocialMainPageState extends State<SocialMainPage> {
                                   Navigator.of(ctx).pop();
                                   setState(() {
                                     mainTabIndex = 0;
-                                    subTabIndex = 5;
+                                    subTabIndex = 5; // 钱包是第6个选项（索引5）
                                   });
                                 },
                               ),
@@ -990,6 +1022,36 @@ class _SocialMainPageState extends State<SocialMainPage> {
                                   Navigator.of(ctx).pop();
                                   // 使用简单的清理聊天工具
                                   SimpleCleanChat.cleanChat(context);
+                                },
+                              ),
+                              ListTile(
+                                leading: Icon(Icons.auto_fix_high, color: AppTheme.primaryColor),
+                                title: Text('聊天记录修复工具'),
+                                trailing: Icon(Icons.chevron_right),
+                                onTap: () {
+                                  Navigator.of(ctx).pop();
+                                  // 打开聊天记录清理工具页面
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => ChatCleanerPage(),
+                                    ),
+                                  );
+                                },
+                              ),
+                              ListTile(
+                                leading: Icon(Icons.delete_sweep, color: Colors.deepOrange),
+                                title: Text('完全数据清理', style: TextStyle(color: Colors.deepOrange)),
+                                trailing: Icon(Icons.chevron_right),
+                                onTap: () {
+                                  Navigator.of(ctx).pop();
+                                  // 打开完全数据清理工具页面
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => DataCleanupPage(),
+                                    ),
+                                  );
                                 },
                               ),
                               ListTile(
@@ -1059,11 +1121,13 @@ class _SocialMainPageState extends State<SocialMainPage> {
       switch (subTabIndex) {
         case 0: // 聊天
           return isMobile ? ChatPage() : TwoPanelChatPage();
-        case 1: // 朋友圈
+        case 1: // 群聊
+          return GroupListPage();
+        case 2: // 朋友圈
           return Center(child: Text('朋友圈功能开发中'));
-        case 2: // 好友
+        case 3: // 好友
           return FriendsPage();
-        case 3: // 好友设置
+        case 4: // 好友设置
           return FriendSettingsPage(
             onSettingsChanged: () {
               // 设置更改后的回调
@@ -1075,7 +1139,7 @@ class _SocialMainPageState extends State<SocialMainPage> {
               );
             },
           );
-        case 4: // 钱包
+        case 5: // 钱包
           return WalletPage();
         default:
           return Center(child: Text('未知社交子模块'));

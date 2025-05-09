@@ -63,18 +63,18 @@ class _RegisterPageState extends State<RegisterPage> {
   // 刷新验证码（对接后端）
   void getVerifyCodeFromBackend() async {
     if (_isLoadingCaptcha) return; // 防止重复请求
-    
+
     setState(() {
       _isLoadingCaptcha = true;
       _errorMessage = null;
     });
-    
+
     try {
       print('请求验证码...');
       var data = await Api.getCaptcha();
       print('收到验证码响应:');
       print(data);
-      
+
       if (mounted) {
         setState(() {
           captchaId = data['id'] ?? '';
@@ -101,7 +101,7 @@ class _RegisterPageState extends State<RegisterPage> {
       getVerifyCodeFromBackend();
     });
   }
-  
+
   @override
   void dispose() {
     accountCtrl.dispose();
@@ -115,8 +115,8 @@ class _RegisterPageState extends State<RegisterPage> {
     if (_isLoadingCaptcha) {
       return Center(
         child: SizedBox(
-          width: 24, 
-          height: 24, 
+          width: 24,
+          height: 24,
           child: CircularProgressIndicator(
             strokeWidth: 2,
             valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
@@ -124,13 +124,13 @@ class _RegisterPageState extends State<RegisterPage> {
         )
       );
     }
-    
+
     if (captchaImg.isEmpty) {
       return Center(
         child: Icon(Icons.refresh, color: Colors.grey)
       );
     }
-    
+
     try {
       // 兼容带 data:image/png;base64, 前缀和无前缀
       String base64Str = captchaImg;
@@ -152,7 +152,7 @@ class _RegisterPageState extends State<RegisterPage> {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Scaffold(
       body: Stack(
         fit: StackFit.expand,
@@ -177,7 +177,7 @@ class _RegisterPageState extends State<RegisterPage> {
               ),
             ),
           ),
-          
+
           // 装饰性气泡元素
           Positioned(
             top: MediaQuery.of(context).size.height * 0.15,
@@ -198,7 +198,7 @@ class _RegisterPageState extends State<RegisterPage> {
               ),
             ),
           ),
-          
+
           Positioned(
             bottom: MediaQuery.of(context).size.height * 0.1,
             left: MediaQuery.of(context).size.width * 0.1,
@@ -218,7 +218,7 @@ class _RegisterPageState extends State<RegisterPage> {
               ),
             ),
           ),
-          
+
           // 主内容
           Center(
             child: SingleChildScrollView(
@@ -254,21 +254,21 @@ class _RegisterPageState extends State<RegisterPage> {
                       Align(
                         alignment: Alignment.centerLeft,
                         child: IconButton(
-                          icon: Icon(Icons.arrow_back_ios_new, 
+                          icon: Icon(Icons.arrow_back_ios_new,
                             color: isDarkMode ? Colors.white70 : Colors.black87),
                           onPressed: () => Navigator.of(context).maybePop(),
                           tooltip: '返回',
                         ),
                       ),
                       SizedBox(height: 8),
-                      
+
                       // Logo
                       Hero(
                         tag: 'logo',
                         child: SvgPicture.asset('assets/imgs/logo.svg', width: 72, height: 72),
                       ),
                       SizedBox(height: 16),
-                      
+
                       // 标题
                       Text(
                         '创建账号',
@@ -287,7 +287,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         ),
                       ),
                       SizedBox(height: 24),
-                      
+
                       // 错误消息显示
                       if (_errorMessage != null)
                         AppAnimations.fadeIn(
@@ -314,7 +314,7 @@ class _RegisterPageState extends State<RegisterPage> {
                             ),
                           ),
                         ),
-                        
+
                       // 成功消息显示
                       if (_registerSuccess)
                         AppAnimations.fadeIn(
@@ -341,7 +341,7 @@ class _RegisterPageState extends State<RegisterPage> {
                             ),
                           ),
                         ),
-                      
+
                       // 账号输入框
                       AppAnimations.fadeIn(
                         duration: Duration(milliseconds: 700),
@@ -377,7 +377,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         ),
                       ),
                       SizedBox(height: 16),
-                      
+
                       // 密码输入框
                       AppAnimations.fadeIn(
                         duration: Duration(milliseconds: 800),
@@ -407,7 +407,7 @@ class _RegisterPageState extends State<RegisterPage> {
                           onChanged: (v) => setState(() {}),
                         ),
                       ),
-                      
+
                       // 密码强度指示器
                       if (pwdCtrl.text.isNotEmpty)
                         AppAnimations.fadeIn(
@@ -433,7 +433,7 @@ class _RegisterPageState extends State<RegisterPage> {
                           ),
                         ),
                       SizedBox(height: 16),
-                      
+
                       // 确认密码
                       AppAnimations.fadeIn(
                         duration: Duration(milliseconds: 900),
@@ -467,7 +467,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         ),
                       ),
                       SizedBox(height: 16),
-                      
+
                       // 验证码
                       AppAnimations.fadeIn(
                         duration: Duration(milliseconds: 1000),
@@ -500,8 +500,8 @@ class _RegisterPageState extends State<RegisterPage> {
                             ),
                             SizedBox(width: 12),
                             GestureDetector(
-                              onTap: !_isLoadingCaptcha && !_loading && !_registerSuccess 
-                                  ? getVerifyCodeFromBackend 
+                              onTap: !_isLoadingCaptcha && !_loading && !_registerSuccess
+                                  ? getVerifyCodeFromBackend
                                   : null,
                               child: Container(
                                 width: 100,
@@ -510,8 +510,8 @@ class _RegisterPageState extends State<RegisterPage> {
                                   color: isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: isDarkMode 
-                                        ? Colors.grey.shade700 
+                                    color: isDarkMode
+                                        ? Colors.grey.shade700
                                         : Colors.grey.shade300,
                                   ),
                                 ),
@@ -525,7 +525,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         ),
                       ),
                       SizedBox(height: 24),
-                      
+
                       // 注册按钮
                       AppAnimations.fadeIn(
                         duration: Duration(milliseconds: 1100),
@@ -579,7 +579,7 @@ class _RegisterPageState extends State<RegisterPage> {
                           ),
                         ),
                       ),
-                      
+
                       // 底部提示
                       SizedBox(height: 16),
                       AppAnimations.fadeIn(
@@ -618,71 +618,71 @@ class _RegisterPageState extends State<RegisterPage> {
       ),
     );
   }
-  
+
   // 注册方法
   Future<void> _register() async {
     // 清除之前的错误信息
     setState(() {
       _errorMessage = null;
     });
-    
+
     // 验证输入
     String account = accountCtrl.text.trim();
     String pwd = pwdCtrl.text;
     String pwd2 = pwd2Ctrl.text;
     String code = codeCtrl.text.trim();
-    
+
     if (account.isEmpty || pwd.isEmpty || pwd2.isEmpty || code.isEmpty) {
       setState(() {
         _errorMessage = '请填写完整信息';
       });
       return;
     }
-    
+
     if (!RegExp(r'^[a-zA-Z][a-zA-Z0-9]{4,31} ?$').hasMatch(account)) {
       setState(() {
         _errorMessage = '账号需英文开头，仅支持字母和数字，5-32位';
       });
       return;
     }
-    
+
     if (pwd != pwd2) {
       setState(() {
         _errorMessage = '两次密码不一致';
       });
       return;
     }
-    
+
     if (_passwordStrength(pwd) < 0.3) {
       setState(() {
         _errorMessage = '密码强度太弱，请包含大小写字母、数字和特殊字符';
       });
       return;
     }
-    
+
     // 开始注册
     setState(() {
       _loading = true;
     });
-    
+
     try {
       var resp = await Api.register(
         account: account,
         password: pwd,
-        captchaId: captchaId,
-        captchaValue: code,
+        nickname: account,
+        verificationCode: code,
       );
-      
+
       if (resp['success'] == true) {
         // 注册成功
         setState(() {
           _loading = false;
           _registerSuccess = true;
         });
-        
+
         // 短暂延迟后跳转
         await Future.delayed(Duration(milliseconds: 1200));
-        
+
         if (mounted) {
           // 跳转到登录页并传递账号密码
           Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false, arguments: {

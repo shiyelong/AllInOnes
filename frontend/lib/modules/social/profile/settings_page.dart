@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'widgets/friend_add_mode_switcher.dart';
+import 'package:frontend/tools/chat_cleanup_tool.dart';
+import 'package:frontend/pages/data_cleanup_page.dart';
 
 /// 通用设置页，后续可扩展各端个性化设置项
 class SettingsPage extends StatelessWidget {
@@ -37,6 +39,38 @@ class SettingsPage extends StatelessWidget {
             leading: const Icon(Icons.security),
             title: const Text('隐私与安全'),
             trailing: const Icon(Icons.chevron_right),
+          ),
+          const Divider(height: 1),
+          // 聊天清理工具
+          ListTile(
+            leading: const Icon(Icons.cleaning_services),
+            title: const Text('聊天清理工具'),
+            subtitle: const Text('清理聊天记录和缓存'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ChatCleanupTool(),
+                ),
+              );
+            },
+          ),
+          const Divider(height: 1),
+          // 完全数据清理工具
+          ListTile(
+            leading: const Icon(Icons.delete_sweep),
+            title: const Text('完全数据清理'),
+            subtitle: const Text('彻底清理所有聊天记录和应用数据'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => DataCleanupPage(),
+                ),
+              );
+            },
           ),
           const Divider(height: 1),
           ListTile(

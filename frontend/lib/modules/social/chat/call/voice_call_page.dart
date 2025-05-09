@@ -7,15 +7,19 @@ import 'dart:async';
 class VoiceCallPage extends StatefulWidget {
   final String targetId;
   final String targetName;
-  final String targetAvatar;
+  final String? targetAvatar;
   final bool isIncoming;
-  
+  final VoidCallback onCallEnded;
+  final String? callId;
+
   const VoiceCallPage({
     Key? key,
     required this.targetId,
     required this.targetName,
-    required this.targetAvatar,
+    this.targetAvatar,
     this.isIncoming = false,
+    required this.onCallEnded,
+    this.callId,
   }) : super(key: key);
 
   @override
@@ -29,11 +33,11 @@ class _VoiceCallPageState extends State<VoiceCallPage> {
   String _callStatus = '正在连接...';
   Timer? _callTimer;
   int _callDuration = 0;
-  
+
   @override
   void initState() {
     super.initState();
-    
+
     if (!widget.isIncoming) {
       _initiateCall();
     } else {
@@ -42,31 +46,31 @@ class _VoiceCallPageState extends State<VoiceCallPage> {
       });
     }
   }
-  
+
   @override
   void dispose() {
     _callTimer?.cancel();
     super.dispose();
   }
-  
+
   Future<void> _initiateCall() async {
     final userId = Persistence.getUserInfo()?.id;
     if (userId == null) {
       _handleCallError('未获取到用户信息');
       return;
     }
-    
+
     try {
-      final response = await Api.startVoiceCall(
-        fromId: userId.toString(),
-        toId: widget.targetId,
+      // 使用新的API方法
+      final response = await Api.startVoiceCallWithId(
+        targetId: widget.targetId,
       );
-      
+
       if (response['success'] == true) {
         setState(() {
           _callStatus = '正在呼叫...';
         });
-        
+
         // 模拟对方接听
         Future.delayed(Duration(seconds: 2), () {
           _handleCallConnected();
@@ -78,13 +82,13 @@ class _VoiceCallPageState extends State<VoiceCallPage> {
       _handleCallError('网络异常: $e');
     }
   }
-  
+
   void _handleCallConnected() {
     setState(() {
       _isConnected = true;
       _callStatus = '已接通';
     });
-    
+
     // 开始计时
     _callTimer = Timer.periodic(Duration(seconds: 1), (timer) {
       setState(() {
@@ -92,64 +96,66 @@ class _VoiceCallPageState extends State<VoiceCallPage> {
       });
     });
   }
-  
+
   void _handleCallError(String error) {
     setState(() {
       _callStatus = '呼叫失败: $error';
     });
-    
+
     // 显示错误后返回
     Future.delayed(Duration(seconds: 2), () {
       Navigator.pop(context);
     });
   }
-  
+
   void _toggleMute() {
     setState(() {
       _isMuted = !_isMuted;
     });
     // TODO: 实现实际的静音功能
   }
-  
+
   void _toggleSpeaker() {
     setState(() {
       _isSpeakerOn = !_isSpeakerOn;
     });
     // TODO: 实现实际的扬声器切换功能
   }
-  
+
   void _endCall() async {
     final userId = Persistence.getUserInfo()?.id;
     if (userId == null) {
       Navigator.pop(context);
       return;
     }
-    
+
     try {
-      await Api.endVoiceCall(
-        fromId: userId.toString(),
-        toId: widget.targetId,
+      // 使用新的API方法
+      await Api.endVoiceCallWithId(
+        callId: widget.targetId,
       );
     } catch (e) {
       print('结束通话出错: $e');
     }
-    
+
+    // 调用通话结束回调
+    widget.onCallEnded();
+
     Navigator.pop(context);
   }
-  
+
   void _acceptCall() async {
     final userId = Persistence.getUserInfo()?.id;
     if (userId == null) {
       _handleCallError('未获取到用户信息');
       return;
     }
-    
+
     try {
       final response = await Api.acceptVoiceCall(
-        fromId: widget.targetId,
-        toId: userId.toString(),
+        callId: widget.targetId,
       );
-      
+
       if (response['success'] == true) {
         _handleCallConnected();
       } else {
@@ -159,26 +165,26 @@ class _VoiceCallPageState extends State<VoiceCallPage> {
       _handleCallError('网络异常: $e');
     }
   }
-  
+
   void _rejectCall() async {
     final userId = Persistence.getUserInfo()?.id;
     if (userId == null) {
       Navigator.pop(context);
       return;
     }
-    
+
     try {
-      await Api.rejectVoiceCall(
-        fromId: widget.targetId,
-        toId: userId.toString(),
+      // 使用新的API方法
+      await Api.rejectVoiceCallWithId(
+        callId: widget.targetId,
       );
     } catch (e) {
       print('拒绝通话出错: $e');
     }
-    
+
     Navigator.pop(context);
   }
-  
+
   String _formatDuration(int seconds) {
     final minutes = seconds ~/ 60;
     final remainingSeconds = seconds % 60;
@@ -188,7 +194,7 @@ class _VoiceCallPageState extends State<VoiceCallPage> {
   @override
   Widget build(BuildContext context) {
     final theme = ThemeManager.currentTheme;
-    
+
     return Scaffold(
       backgroundColor: theme.isDark ? Colors.black : Colors.white,
       body: SafeArea(
@@ -229,7 +235,7 @@ class _VoiceCallPageState extends State<VoiceCallPage> {
       ),
     );
   }
-  
+
   Widget _buildCallActions() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -256,7 +262,7 @@ class _VoiceCallPageState extends State<VoiceCallPage> {
       ],
     );
   }
-  
+
   Widget _buildIncomingCallActions() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -276,7 +282,7 @@ class _VoiceCallPageState extends State<VoiceCallPage> {
       ],
     );
   }
-  
+
   Widget _buildActionButton({
     required IconData icon,
     required String label,

@@ -6,11 +6,10 @@ import 'dart:convert';
 import '../video_call_page.dart';
 import '../voice_call_page.dart';
 
-/// 全局导航键，用于在任何地方访问导航器
-final GlobalKey<NavigatorState> simplifiedNavigatorKey = GlobalKey<NavigatorState>();
+
 
 /// 简化版通话管理器
-/// 
+///
 /// 提供基本的语音和视频通话功能，不依赖于复杂的WebRTC实现
 class SimplifiedCallManager {
   // 单例模式
@@ -40,65 +39,75 @@ class SimplifiedCallManager {
   }
 
   // 开始语音通话
-  void startVoiceCall(String targetId, String targetName, String? targetAvatar) {
+  void startVoiceCall(
+    BuildContext context,
+    String targetId,
+    String targetName, {
+    String? targetAvatar,
+  }) {
     if (_isInCall) {
       debugPrint('[SimplifiedCallManager] 已经在通话中，无法发起新通话');
       return;
     }
 
     debugPrint('[SimplifiedCallManager] 发起语音通话: $targetId, $targetName');
-    
+
     // 生成通话ID
     _currentCallId = DateTime.now().millisecondsSinceEpoch.toString();
     _currentCallType = 'voice';
     _currentTargetId = targetId;
     _isInCall = true;
-    
+
     // 打开语音通话页面
-    simplifiedNavigatorKey.currentState?.push(
+    Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => VoiceCallPage(
-          callId: _currentCallId!,
           targetId: targetId,
           targetName: targetName,
           targetAvatar: targetAvatar,
           onCallEnded: _handleCallEnded,
+          callId: _currentCallId,
         ),
       ),
     );
-    
+
     // 开始计时
     _startCallTimer();
   }
 
   // 开始视频通话
-  void startVideoCall(String targetId, String targetName, String? targetAvatar) {
+  void startVideoCall(
+    BuildContext context,
+    String targetId,
+    String targetName, {
+    String? targetAvatar,
+  }) {
     if (_isInCall) {
       debugPrint('[SimplifiedCallManager] 已经在通话中，无法发起新通话');
       return;
     }
 
     debugPrint('[SimplifiedCallManager] 发起视频通话: $targetId, $targetName');
-    
+
     // 生成通话ID
     _currentCallId = DateTime.now().millisecondsSinceEpoch.toString();
     _currentCallType = 'video';
     _currentTargetId = targetId;
     _isInCall = true;
-    
+
     // 打开视频通话页面
-    simplifiedNavigatorKey.currentState?.push(
+    Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => VideoCallPage(
-          callId: _currentCallId!,
           targetId: targetId,
           targetName: targetName,
           targetAvatar: targetAvatar,
           onCallEnded: _handleCallEnded,
+          callId: _currentCallId,
         ),
       ),
     );
-    
+
     // 开始计时
     _startCallTimer();
   }
@@ -111,10 +120,10 @@ class SimplifiedCallManager {
     }
 
     debugPrint('[SimplifiedCallManager] 结束通话: $_currentCallId');
-    
+
     // 停止计时
     _stopCallTimer();
-    
+
     // 重置通话状态
     _isInCall = false;
     _currentCallId = null;

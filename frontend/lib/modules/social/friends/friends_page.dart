@@ -79,8 +79,6 @@ class _FriendsPageState extends State<FriendsPage> {
 
       final response = await Api.getFriendRequests(
         userId: userId.toString(),
-        type: 'received',
-        status: 'pending',
       );
 
       if (response['success'] == true && mounted) {
@@ -526,9 +524,7 @@ class _FriendsPageState extends State<FriendsPage> {
                   onSelected: (value) async {
                     if (value == 'block') {
                       // 屏蔽好友
-                      final userId = Persistence.getUserInfo()?.id.toString() ?? '';
                       final response = await Api.blockFriend(
-                        userId: userId,
                         friendId: friend['friend_id'].toString(),
                       );
 
@@ -544,9 +540,7 @@ class _FriendsPageState extends State<FriendsPage> {
                       }
                     } else if (value == 'unblock') {
                       // 取消屏蔽
-                      final userId = Persistence.getUserInfo()?.id.toString() ?? '';
                       final response = await Api.unblockFriend(
-                        userId: userId,
                         friendId: friend['friend_id'].toString(),
                       );
 

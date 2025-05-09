@@ -438,8 +438,8 @@ class _NewRegisterPageState extends State<NewRegisterPage> {
       } else {
         // 邮箱注册 - 发送邮箱验证码
         response = await Api.getVerificationCode(
+          email: target,
           type: type,
-          target: target,
         );
 
         print('验证码发送响应: $response');
@@ -622,14 +622,12 @@ class _NewRegisterPageState extends State<NewRegisterPage> {
     try {
       // 调用API注册
       var resp = await Api.registerNew(
-        email: email,
-        phone: phone,
+        account: _registerType == RegisterType.email ? email ?? '' : phone ?? '',
         password: password,
+        nickname: nickname,
+        verificationCode: verificationCode,
         captchaId: captchaId,
-        captchaValue: captchaCode,
-        verificationCode: verificationCode, // 添加手机/邮箱验证码
-        registerType: registerType,
-        nickname: nickname, // 添加昵称
+        captchaCode: captchaCode,
       );
 
       print('注册响应: $resp');

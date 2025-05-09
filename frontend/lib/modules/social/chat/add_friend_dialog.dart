@@ -78,8 +78,6 @@ class _AddFriendDialogState extends State<AddFriendDialog> with SingleTickerProv
 
       // 调用API获取推荐好友
       final response = await Api.getRecommendedFriends(
-        currentUserId: userId.toString(),
-        limit: 20,
         gender: _selectedGender,
       );
 
@@ -138,8 +136,8 @@ class _AddFriendDialogState extends State<AddFriendDialog> with SingleTickerProv
       // 调用API搜索用户
       final response = await Api.searchUsers(
         keyword: keyword,
-        currentUserId: userId.toString(),
-        gender: _selectedGender,
+        page: 1,
+        pageSize: 20,
       );
 
       if (response['success'] == true) {
@@ -212,10 +210,8 @@ class _AddFriendDialogState extends State<AddFriendDialog> with SingleTickerProv
 
       // 调用API添加好友
       final response = await Api.addFriend(
-        userId: userId.toString(),
-        friendId: _selectedUser!['id'].toString(),
+        targetId: _selectedUser!['id'].toString(),
         message: _messageController.text,
-        sourceType: _sourceType,
       );
 
       if (response['success'] == true) {

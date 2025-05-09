@@ -14,6 +14,10 @@ import 'common/persistence.dart';
 import 'common/platform_utils.dart';
 import 'modules/profile/settings/theme_settings_page.dart';
 import 'modules/social/chat/call/simplified/simplified_call_manager.dart';
+import 'pages/data_cleanup_page.dart';
+import 'common/network_monitor.dart';
+import 'common/websocket_manager.dart';
+import 'common/websocket_message_handler.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,6 +58,35 @@ void main() async {
     debugPrint('初始化简化版通话管理器失败: $e');
   }
 
+  // 初始化网络监控器
+  try {
+    NetworkMonitor().initialize();
+    debugPrint('初始化网络监控器成功');
+  } catch (e) {
+    debugPrint('初始化网络监控器失败: $e');
+  }
+
+  // 初始化WebSocket消息处理器
+  try {
+    WebSocketMessageHandler().initialize();
+    debugPrint('初始化WebSocket消息处理器成功');
+  } catch (e) {
+    debugPrint('初始化WebSocket消息处理器失败: $e');
+  }
+
+  // 初始化WebSocket连接
+  try {
+    // 如果用户已登录，则初始化WebSocket连接
+    if (Persistence.isLoggedIn()) {
+      WebSocketManager().initialize();
+      debugPrint('初始化WebSocket连接成功');
+    } else {
+      debugPrint('用户未登录，跳过WebSocket连接初始化');
+    }
+  } catch (e) {
+    debugPrint('初始化WebSocket连接失败: $e');
+  }
+
   runApp(const MyApp());
 }
 
@@ -66,13 +99,25 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   @override
+  void dispose() {
+    // 释放网络监控器资源
+    NetworkMonitor().dispose();
+
+    // 释放WebSocket资源
+    WebSocketManager().close();
+    WebSocketMessageHandler().dispose();
+
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'AllInOne',
       debugShowCheckedModeBanner: false,
       theme: ThemeManager.getThemeData(),
       themeMode: ThemeMode.light, // 使用自定义主题
-      navigatorKey: simplifiedNavigatorKey, // 使用简化版全局导航键，用于通话管理器
+      navigatorKey: GlobalKey<NavigatorState>(), // 使用全局导航键
       initialRoute: '/login',
       routes: {
         '/login': (context) => AutoLoginGate(child: LoginPage()),
@@ -86,7 +131,10 @@ class _MyAppState extends State<MyApp> {
           },
         ),
         '/wallet': (context) => const WalletPage(),
-        // 移除测试页面
+        // 添加群聊页面路由
+        '/group_chat': (context) => SocialMainPage(),
+        // 数据清理页面路由
+        '/data_cleanup': (context) => const DataCleanupPage(),
         // 添加好友页面路由
         '/add_friend': (context) => Scaffold(
           appBar: AppBar(title: Text('添加好友')),

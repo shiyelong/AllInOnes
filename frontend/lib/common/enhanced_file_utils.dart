@@ -15,6 +15,9 @@ class EnhancedFileUtils {
   /// 文件元数据存储键
   static const String _fileMetadataKey = 'file_metadata';
 
+  /// 临时文件目录名
+  static const String _tempDirName = 'temp_files';
+
   /// 将本地文件路径转换为可用于Flutter的URI
   ///
   /// 处理不同平台的文件路径格式，确保它们可以被Flutter正确加载
@@ -344,6 +347,233 @@ class EnhancedFileUtils {
     }
   }
 
+  /// 增强版下载并保存文件2
+  /// 改进版的文件下载和保存方法，支持更多选项和更好的错误处理
+  static Future<Map<String, dynamic>> downloadAndSaveFileEnhanced2(
+    String url, {
+    String? fileType,
+    String? serverUrl,
+    String? customFileName,
+    bool overwrite = false,
+  }) async {
+    try {
+      // 检查URL是否有效
+      if (url.isEmpty) {
+        debugPrint('[EnhancedFileUtils] URL为空');
+        return {'success': false, 'msg': 'URL为空'};
+      }
+
+      // 如果是本地文件路径，直接返回
+      if (url.startsWith('file://') || url.startsWith('/')) {
+        final filePath = getValidFilePath(url);
+        final file = File(filePath);
+        if (await file.exists()) {
+          debugPrint('[EnhancedFileUtils] 本地文件已存在: $filePath');
+
+          // 保存文件元数据
+          await saveFileMetadata({
+            'path': filePath,
+            'file_name': customFileName ?? path.basename(filePath),
+            'type': fileType ?? 'file',
+            'original_url': url,
+            'server_url': serverUrl ?? url,
+            'created_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+          });
+
+          return {
+            'success': true,
+            'path': filePath,
+            'server_url': serverUrl ?? url,
+          };
+        } else {
+          debugPrint('[EnhancedFileUtils] 本地文件不存在: $filePath');
+          return {'success': false, 'msg': '本地文件不存在: $filePath'};
+        }
+      }
+
+      // 如果不是HTTP/HTTPS URL，返回错误
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        debugPrint('[EnhancedFileUtils] 不支持的URL格式: $url');
+        return {'success': false, 'msg': '不支持的URL格式: $url'};
+      }
+
+      // 获取文件名
+      String fileName = customFileName ?? url.split('/').last;
+      if (fileName.isEmpty || !fileName.contains('.')) {
+        // 生成随机文件名
+        fileName = '${DateTime.now().millisecondsSinceEpoch}';
+        if (fileType != null) {
+          switch (fileType) {
+            case 'image':
+              fileName += '.jpg';
+              break;
+            case 'video':
+              fileName += '.mp4';
+              break;
+            case 'audio':
+              fileName += '.mp3';
+              break;
+            default:
+              fileName += '.dat';
+          }
+        } else {
+          fileName += '.dat';
+        }
+      }
+
+      // 获取应用文档目录
+      final appDir = await getApplicationDocumentsDirectory();
+
+      // 根据文件类型创建不同的目录
+      String subDir = 'downloads';
+      if (fileType != null) {
+        switch (fileType) {
+          case 'image':
+            subDir = 'images';
+            break;
+          case 'video':
+            subDir = 'videos';
+            break;
+          case 'audio':
+            subDir = 'audios';
+            break;
+          case 'file':
+            subDir = 'files';
+            break;
+        }
+      }
+
+      final saveDir = Directory('${appDir.path}/$subDir');
+      if (!await saveDir.exists()) {
+        await saveDir.create(recursive: true);
+      }
+
+      // 使用URL的哈希值和文件名组合作为保存文件名，避免重复下载
+      final urlHash = url.hashCode.toString();
+      final uniqueFileName = '${urlHash}_$fileName';
+
+      // 保存路径
+      final savePath = '${saveDir.path}/$uniqueFileName';
+
+      // 检查文件是否已存在
+      final saveFile = File(savePath);
+      if (await saveFile.exists() && !overwrite) {
+        debugPrint('[EnhancedFileUtils] 文件已存在，无需下载: $savePath');
+
+        // 保存文件元数据
+        await saveFileMetadata({
+          'path': savePath,
+          'file_name': fileName,
+          'type': fileType ?? 'file',
+          'original_url': url,
+          'server_url': serverUrl ?? url,
+          'created_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        });
+
+        return {
+          'success': true,
+          'path': savePath,
+          'server_url': serverUrl ?? url,
+        };
+      }
+
+      debugPrint('[EnhancedFileUtils] 开始下载文件: $url');
+
+      // 下载文件
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        await saveFile.writeAsBytes(response.bodyBytes);
+        debugPrint('[EnhancedFileUtils] 文件下载成功: $savePath');
+
+        // 保存文件元数据
+        await saveFileMetadata({
+          'path': savePath,
+          'file_name': fileName,
+          'type': fileType ?? 'file',
+          'original_url': url,
+          'server_url': serverUrl ?? url,
+          'created_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        });
+
+        // 保存URL和本地路径的映射关系
+        await _saveUrlPathMapping(url, savePath);
+
+        return {
+          'success': true,
+          'path': savePath,
+          'server_url': serverUrl ?? url,
+        };
+      } else {
+        debugPrint('[EnhancedFileUtils] 下载失败，状态码: ${response.statusCode}');
+        return {
+          'success': false,
+          'msg': '下载失败，状态码: ${response.statusCode}',
+        };
+      }
+    } catch (e) {
+      debugPrint('[EnhancedFileUtils] 下载文件异常: $e');
+      return {'success': false, 'msg': '下载文件异常: $e'};
+    }
+  }
+
+  /// 保存URL和本地路径的映射关系
+  static Future<void> _saveUrlPathMapping(String url, String localPath) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final mappings = prefs.getStringList('url_path_mappings') ?? [];
+
+      // 映射格式: "url:::localPath"
+      final mapping = '$url:::$localPath';
+
+      // 检查是否已存在相同URL的映射
+      final existingIndex = mappings.indexWhere((item) => item.startsWith('$url:::'));
+      if (existingIndex != -1) {
+        // 更新现有映射
+        mappings[existingIndex] = mapping;
+      } else {
+        // 添加新映射
+        mappings.add(mapping);
+      }
+
+      await prefs.setStringList('url_path_mappings', mappings);
+      debugPrint('[EnhancedFileUtils] 保存URL映射: $url -> $localPath');
+    } catch (e) {
+      debugPrint('[EnhancedFileUtils] 保存URL映射失败: $e');
+    }
+  }
+
+  /// 根据URL获取本地路径
+  static Future<String?> getLocalPathByUrl(String url) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final mappings = prefs.getStringList('url_path_mappings') ?? [];
+
+      // 查找匹配的映射
+      for (final mapping in mappings) {
+        final parts = mapping.split(':::');
+        if (parts.length == 2 && parts[0] == url) {
+          final localPath = parts[1];
+
+          // 检查文件是否存在
+          final file = File(localPath);
+          if (await file.exists()) {
+            return localPath;
+          } else {
+            // 文件不存在，删除映射
+            mappings.remove(mapping);
+            await prefs.setStringList('url_path_mappings', mappings);
+            return null;
+          }
+        }
+      }
+
+      return null;
+    } catch (e) {
+      debugPrint('[EnhancedFileUtils] 获取本地路径失败: $e');
+      return null;
+    }
+  }
+
   /// 下载并保存图片
   /// 专门用于处理图片文件
   static Future<String> downloadAndSaveImage(String imageUrl) async {
@@ -460,6 +690,62 @@ class EnhancedFileUtils {
     } catch (e) {
       debugPrint('[EnhancedFileUtils] 获取文件大小失败: $e');
       return '未知大小';
+    }
+  }
+
+  /// 清理临时文件
+  static Future<Map<String, dynamic>> cleanupTemporaryFiles() async {
+    try {
+      int deletedFiles = 0;
+      int failedFiles = 0;
+
+      // 获取临时目录
+      final tempDir = await getTemporaryDirectory();
+      final appTempDir = Directory('${tempDir.path}/$_tempDirName');
+
+      // 如果临时目录不存在，创建它
+      if (!await appTempDir.exists()) {
+        await appTempDir.create(recursive: true);
+        return {
+          'success': true,
+          'deletedFiles': 0,
+          'failedFiles': 0,
+          'message': '临时目录不存在，已创建新目录',
+        };
+      }
+
+      // 获取所有文件
+      final files = await appTempDir.list().toList();
+
+      // 删除所有文件
+      for (var entity in files) {
+        if (entity is File) {
+          try {
+            await entity.delete();
+            deletedFiles++;
+          } catch (e) {
+            debugPrint('[EnhancedFileUtils] 删除临时文件失败: ${entity.path}, 错误: $e');
+            failedFiles++;
+          }
+        }
+      }
+
+      debugPrint('[EnhancedFileUtils] 临时文件清理完成，已删除: $deletedFiles, 失败: $failedFiles');
+
+      return {
+        'success': true,
+        'deletedFiles': deletedFiles,
+        'failedFiles': failedFiles,
+        'message': '临时文件清理完成',
+      };
+    } catch (e) {
+      debugPrint('[EnhancedFileUtils] 清理临时文件异常: $e');
+      return {
+        'success': false,
+        'deletedFiles': 0,
+        'failedFiles': 0,
+        'message': '清理临时文件异常: $e',
+      };
     }
   }
 }

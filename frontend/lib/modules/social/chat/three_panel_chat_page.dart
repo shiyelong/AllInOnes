@@ -3,6 +3,7 @@ import '../../../common/persistence.dart';
 import '../../../common/theme.dart';
 import '../../../common/theme_manager.dart';
 import '../../../common/api.dart';
+import '../../../common/local_message_storage.dart';
 import '../../../widgets/app_avatar.dart';
 import 'add_friend_dialog.dart';
 import 'chat_detail.dart';
@@ -10,6 +11,7 @@ import 'chat_service.dart';
 import 'chat_detail_page.dart';
 import 'self_chat_page.dart';
 import '../friends/friends_page.dart';
+import 'widgets/telegram_style_chat_list_item.dart';
 
 /// 二栏式聊天界面（桌面端）
 /// 左侧：最近聊天列表
@@ -156,11 +158,24 @@ class _TwoPanelChatPageState extends State<TwoPanelChatPage> {
 
   // 选择聊天
   Future<void> _selectChat(int idx) async {
+    // 获取当前选中的聊天ID和新选中的聊天ID
+    final currentChatId = _selectedChatIdx != null ? _recentChats[_selectedChatIdx!]['target_id'] : null;
+    final newChatId = _recentChats[idx]['target_id'];
+
+    // 如果切换到不同的聊天，先清除本地消息缓存
+    if (currentChatId != null && currentChatId != newChatId) {
+      debugPrint('[ThreePanelChatPage] 切换聊天: 从 $currentChatId 到 $newChatId');
+
+      // 清除内存中的消息
+      setState(() {
+        _messages = [];
+      });
+    }
+
     setState(() {
       _selectedChatIdx = idx;
       _loadingMessages = true;
       _messagesError = '';
-      _messages = [];
     });
 
     await _loadMessages(idx);
@@ -425,110 +440,50 @@ class _TwoPanelChatPageState extends State<TwoPanelChatPage> {
                                 itemBuilder: (context, index) {
                                   final chat = _recentChats[index];
                                   final isSelected = _selectedChatIdx == index;
-                                  final isSelfChat = chat['is_self'] == true;
 
-                                  return ListTile(
-                                    selected: isSelected,
-                                    selectedTileColor: theme.isDark
-                                        ? theme.primaryColor.withOpacity(0.15)
-                                        : theme.primaryColor.withOpacity(0.1),
-                                    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                                    leading: isSelfChat
-                                        ? Container(
-                                            width: 40,
-                                            height: 40,
-                                            decoration: BoxDecoration(
-                                              color: isSelected
-                                                  ? theme.primaryColor
-                                                  : theme.primaryColor.withOpacity(0.7),
-                                              shape: BoxShape.circle,
-                                            ),
-                                            child: Icon(
-                                              Icons.devices,
-                                              color: Colors.white,
-                                              size: 20,
-                                            ),
-                                          )
-                                        : CircleAvatar(
-                                            radius: 20,
-                                            backgroundColor: isSelected
-                                                ? theme.primaryColor
-                                                : theme.isDark
-                                                    ? Colors.grey[700]
-                                                    : Colors.grey[300],
-                                            child: Text(
-                                              chat['target_name']?[0] ?? '?',
-                                              style: TextStyle(
-                                                color: isSelected
-                                                    ? Colors.white
-                                                    : theme.isDark
-                                                        ? Colors.white
-                                                        : Colors.black87,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ),
-                                    title: Text(
-                                      chat['target_name'] ?? '',
-                                      style: TextStyle(
-                                        fontWeight: isSelected ? FontWeight.bold : null,
-                                        color: theme.isDark ? Colors.white : Colors.black87,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    subtitle: Text(
-                                      chat['last_message'] ?? '',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(fontSize: 12),
-                                    ),
-                                    trailing: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        if (isSelfChat)
-                                          Container(
-                                            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: AppTheme.primaryColor.withOpacity(0.1),
-                                              borderRadius: BorderRadius.circular(10),
-                                            ),
-                                            child: Text(
-                                              '我的',
-                                              style: TextStyle(
-                                                color: AppTheme.primaryColor,
-                                                fontSize: 10,
-                                              ),
-                                            ),
-                                          ),
-                                        SizedBox(width: 4),
-                                        if (chat['unread_count'] != null && chat['unread_count'] > 0)
-                                          Container(
-                                            padding: EdgeInsets.all(6),
-                                            decoration: BoxDecoration(
-                                              color: Colors.red,
-                                              shape: BoxShape.circle,
-                                            ),
-                                            child: Text(
-                                              '${chat['unread_count']}',
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 10,
-                                              ),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                    onTap: () {
-                                      if (isSelfChat) {
-                                        // 打开"我的设备"聊天页面
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) => SelfChatPage(),
+                                  return TelegramStyleChatListItem(
+                                    chat: chat,
+                                    isSelected: isSelected,
+                                    onTap: () => _selectChat(index),
+                                    onLongPress: () {
+                                      // 长按操作，可以添加更多功能
+                                    },
+                                    onDelete: () async {
+                                      // 删除聊天记录
+                                      final userInfo = Persistence.getUserInfo();
+                                      if (userInfo == null) return;
+
+                                      final userId = userInfo.id;
+                                      final targetId = chat['target_id'];
+
+                                      // 清除本地消息
+                                      final success = await LocalMessageStorage.clearMessages(userId, targetId);
+
+                                      if (success) {
+                                        // 刷新聊天列表
+                                        _loadRecentChats();
+
+                                        // 如果当前选中的是被删除的聊天，清空消息列表
+                                        if (_selectedChatIdx == index) {
+                                          setState(() {
+                                            _messages = [];
+                                            _messagesError = '';
+                                          });
+                                        }
+
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text('聊天记录已删除'),
+                                            backgroundColor: Colors.green,
                                           ),
                                         );
                                       } else {
-                                        _selectChat(index);
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text('删除聊天记录失败'),
+                                            backgroundColor: Colors.red,
+                                          ),
+                                        );
                                       }
                                     },
                                   );

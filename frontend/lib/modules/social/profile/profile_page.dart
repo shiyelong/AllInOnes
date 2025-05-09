@@ -71,7 +71,12 @@ class _ProfilePageState extends State<ProfilePage> {
       });
 
       // 上传头像
-      final response = await Api.uploadFile(imageFile.path, 'avatar');
+      final response = await Api.uploadFile(
+        filePath: imageFile.path,
+        targetId: '0',
+        fileName: 'avatar.jpg',
+        fileType: 'avatar'
+      );
 
       if (response['success'] == true) {
         // 更新用户信息

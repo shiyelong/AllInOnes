@@ -80,8 +80,6 @@ class _FriendRequestsPageState extends State<FriendRequestsPage> with SingleTick
     try {
       final response = await Api.getFriendRequests(
         userId: userId.toString(),
-        type: _requestTypes[_currentTabIndex],
-        status: _statusFilter,
       );
 
       if (response['success'] == true) {
@@ -124,19 +122,26 @@ class _FriendRequestsPageState extends State<FriendRequestsPage> with SingleTick
     });
 
     try {
+      // 确保请求ID是有效的
+      final requestId = request['id'];
+      if (requestId == null) {
+        throw Exception('无效的请求ID');
+      }
+
+      debugPrint('[FriendRequestsPage] 同意好友请求: requestId=$requestId, userId=$userId');
+
       final response = await Api.agreeFriendRequest(
-        requestId: request['id'].toString(),
-        userId: userId.toString(),
+        requestId: requestId.toString(),
       );
 
-      if (response['success'] == true) {
-        // 刷新列表
-        await _loadFriendRequests();
+      debugPrint('[FriendRequestsPage] 同意好友请求响应: $response');
 
+      if (response['success'] == true) {
         // 获取好友信息
+        final Map<String, dynamic> fromUser = request['from_user'] ?? {};
         final friendName = TextSanitizer.sanitize(
-          request['from_user']['nickname'] ??
-          request['from_user']['account'] ??
+          fromUser['nickname'] ??
+          fromUser['account'] ??
           '好友'
         );
 
@@ -157,6 +162,9 @@ class _FriendRequestsPageState extends State<FriendRequestsPage> with SingleTick
           ),
         );
 
+        // 刷新列表
+        await _loadFriendRequests();
+
         // 回调
         widget.onRequestProcessed?.call();
       } else {
@@ -168,17 +176,20 @@ class _FriendRequestsPageState extends State<FriendRequestsPage> with SingleTick
         );
       }
     } catch (e) {
+      debugPrint('[FriendRequestsPage] 同意好友请求异常: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('网络异常或服务器错误: $e'),
           backgroundColor: Colors.red,
         ),
       );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
-
-    setState(() {
-      _isLoading = false;
-    });
   }
 
   // 拒绝好友请求
@@ -196,22 +207,39 @@ class _FriendRequestsPageState extends State<FriendRequestsPage> with SingleTick
     });
 
     try {
+      // 确保请求ID是有效的
+      final requestId = request['id'];
+      if (requestId == null) {
+        throw Exception('无效的请求ID');
+      }
+
+      debugPrint('[FriendRequestsPage] 拒绝好友请求: requestId=$requestId, userId=$userId');
+
       final response = await Api.rejectFriendRequest(
-        requestId: request['id'].toString(),
-        userId: userId.toString(),
+        requestId: requestId.toString(),
       );
 
+      debugPrint('[FriendRequestsPage] 拒绝好友请求响应: $response');
+
       if (response['success'] == true) {
-        // 刷新列表
-        await _loadFriendRequests();
+        // 获取好友信息
+        final Map<String, dynamic> fromUser = request['from_user'] ?? {};
+        final friendName = TextSanitizer.sanitize(
+          fromUser['nickname'] ??
+          fromUser['account'] ??
+          '好友'
+        );
 
         // 显示成功消息
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('已拒绝好友请求'),
+            content: Text('已拒绝 $friendName 的好友请求'),
             backgroundColor: Colors.orange,
           ),
         );
+
+        // 刷新列表
+        await _loadFriendRequests();
 
         // 回调
         widget.onRequestProcessed?.call();
@@ -224,17 +252,20 @@ class _FriendRequestsPageState extends State<FriendRequestsPage> with SingleTick
         );
       }
     } catch (e) {
+      debugPrint('[FriendRequestsPage] 拒绝好友请求异常: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('网络异常或服务器错误: $e'),
           backgroundColor: Colors.red,
         ),
       );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
-
-    setState(() {
-      _isLoading = false;
-    });
   }
 
   // 批量同意好友请求
@@ -276,7 +307,6 @@ class _FriendRequestsPageState extends State<FriendRequestsPage> with SingleTick
       }
 
       final response = await Api.batchAgreeFriendRequests(
-        userId: userId.toString(),
         requestIds: requestIds,
       );
 
@@ -355,46 +385,123 @@ class _FriendRequestsPageState extends State<FriendRequestsPage> with SingleTick
         return;
       }
 
-      final response = await Api.batchRejectFriendRequests(
-        userId: userId.toString(),
-        requestIds: requestIds,
-      );
+      debugPrint('[FriendRequestsPage] 批量拒绝好友请求: userId=$userId, requestIds=$requestIds, 总数=${requestIds.length}');
 
-      if (response['success'] == true) {
-        // 刷新列表
-        await _loadFriendRequests();
+      // 如果请求ID数量过多，分批处理
+      bool allSuccess = true;
+      String errorMessage = '';
+      int successCount = 0;
+      int failCount = 0;
 
-        // 显示成功消息
+      // 分批处理，每批最多5个，减小批量大小以提高成功率
+      const int batchSize = 5;
+
+      for (int i = 0; i < requestIds.length; i += batchSize) {
+        final int end = (i + batchSize < requestIds.length) ? i + batchSize : requestIds.length;
+        final List<String> batch = requestIds.sublist(i, end);
+
+        debugPrint('[FriendRequestsPage] 处理批次 ${i ~/ batchSize + 1}/${(requestIds.length / batchSize).ceil()}: $batch');
+
+        try {
+          final response = await Api.batchRejectFriendRequests(
+            requestIds: batch,
+          );
+
+          if (response['success'] == true) {
+            successCount += batch.length;
+            debugPrint('[FriendRequestsPage] 批次处理成功: 成功${batch.length}个');
+          } else {
+            // 如果批量操作失败，尝试逐个处理
+            debugPrint('[FriendRequestsPage] 批次处理失败，尝试逐个处理: ${response['msg']}');
+
+            for (String requestId in batch) {
+              try {
+                final singleResponse = await Api.rejectFriendRequest(
+                  requestId: requestId,
+                );
+
+                if (singleResponse['success'] == true) {
+                  successCount++;
+                  debugPrint('[FriendRequestsPage] 单个请求处理成功: requestId=$requestId');
+                } else {
+                  failCount++;
+                  allSuccess = false;
+                  debugPrint('[FriendRequestsPage] 单个请求处理失败: requestId=$requestId, 错误=${singleResponse['msg']}');
+                }
+              } catch (e) {
+                failCount++;
+                allSuccess = false;
+                debugPrint('[FriendRequestsPage] 单个请求处理异常: requestId=$requestId, 错误=$e');
+              }
+
+              // 短暂延迟，避免服务器过载
+              await Future.delayed(Duration(milliseconds: 100));
+            }
+          }
+        } catch (e) {
+          allSuccess = false;
+          errorMessage = '批次处理异常: $e';
+          failCount += batch.length;
+          debugPrint('[FriendRequestsPage] 批次处理异常: $e');
+        }
+
+        // 批次之间添加短暂延迟，避免服务器过载
+        if (end < requestIds.length) {
+          await Future.delayed(Duration(milliseconds: 300));
+        }
+      }
+
+      // 无论成功与否，都刷新列表
+      await _loadFriendRequests();
+
+      // 显示结果消息
+      if (allSuccess) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('已拒绝所有好友请求'),
+            content: Text('已拒绝所有好友请求 ($successCount)'),
             backgroundColor: Colors.orange,
             duration: Duration(seconds: 3),
           ),
         );
-
-        // 回调
-        widget.onRequestProcessed?.call();
+      } else if (successCount > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('已拒绝 $successCount 个请求，$failCount 个请求失败'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 3),
+          ),
+        );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(response['msg'] ?? '批量操作失败'),
+            content: Text(errorMessage.isNotEmpty ? errorMessage : '批量操作失败'),
             backgroundColor: Colors.red,
           ),
         );
       }
+
+      // 回调
+      if (successCount > 0) {
+        widget.onRequestProcessed?.call();
+      }
     } catch (e) {
+      debugPrint('[FriendRequestsPage] 批量拒绝好友请求异常: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('网络异常或服务器错误: $e'),
           backgroundColor: Colors.red,
         ),
       );
-    }
 
-    setState(() {
-      _isLoading = false;
-    });
+      // 出现异常时也刷新列表，确保UI状态正确
+      await _loadFriendRequests();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override

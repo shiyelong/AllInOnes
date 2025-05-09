@@ -89,8 +89,7 @@ class _RedPacketDetailPageState extends State<RedPacketDetailPage> {
 
     try {
       final resp = await Api.grabRedPacketWithWallet(
-        redPacketID: widget.redPacketId.toString(),
-        userID: userInfo.id.toString(),
+        redPacketId: widget.redPacketId.toString(),
       );
 
       if (resp['success'] == true) {
@@ -308,8 +307,7 @@ class _RedPacketDetailPageState extends State<RedPacketDetailPage> {
                                 onPressed: _isGrabbing ? null : _grabRedPacket,
                                 text: '抢红包',
                                 isLoading: _isGrabbing,
-                                color: Colors.yellow,
-                                textColor: Colors.red,
+                                color: Colors.red,
                               ),
                           ],
                         ),

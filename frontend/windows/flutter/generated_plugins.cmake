@@ -4,6 +4,7 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   audioplayers_windows
+  connectivity_plus
   desktop_drop
   desktop_window
   emoji_picker_flutter
@@ -11,7 +12,9 @@ list(APPEND FLUTTER_PLUGIN_LIST
   geolocator_windows
   local_auth_windows
   permission_handler_windows
+  record_windows
   screen_retriever
+  share_plus
   url_launcher_windows
   window_manager
 )
