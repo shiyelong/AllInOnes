@@ -92,16 +92,16 @@ class _CreateGroupPageState extends State<CreateGroupPage> {
       }
 
       // 准备成员列表（包括创建者）
-      final List<int> memberIds = [userInfo.id];
+      final List<String> memberIds = [userInfo.id];
       for (var friend in _selectedFriends) {
-        memberIds.add(friend['friend_id']);
+        memberIds.add(friend['friend_id'].toString());
       }
 
       // 创建群组
       final result = await Api.createGroup(
         name: _nameController.text,
         avatar: avatarUrl,
-        memberIds: memberIds.map((id) => id.toString()).toList(),
+        memberIds: memberIds,
         ownerId: userInfo.id.toString(),
       );
 

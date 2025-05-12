@@ -72,7 +72,10 @@ class _VideoCallPageState extends State<VideoCallPage> {
           _callStatus = '正在呼叫...';
         });
 
-        // 模拟对方接听
+        // 等待对方接听
+        // TODO: 实现实际的WebRTC信令处理
+        // 这里应该监听WebRTC信令，当收到对方接听的信号时调用_handleCallConnected
+        // 临时实现，等待2秒后自动连接
         Future.delayed(Duration(seconds: 2), () {
           _handleCallConnected();
         });

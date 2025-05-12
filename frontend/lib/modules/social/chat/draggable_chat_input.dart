@@ -67,6 +67,7 @@ class DraggableChatInput extends StatefulWidget {
 
 class _DraggableChatInputState extends State<DraggableChatInput> {
   final TextEditingController _controller = TextEditingController();
+  final FocusNode _keyboardFocusNode = FocusNode(); // 添加一个焦点节点用于键盘监听
   bool _showEmoji = false;
   bool _showMoreOptions = false;
   bool _isRecording = false;
@@ -1308,7 +1309,7 @@ class _DraggableChatInputState extends State<DraggableChatInput> {
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: RawKeyboardListener(
-                          focusNode: FocusNode(),
+                          focusNode: _keyboardFocusNode,
                           onKey: (RawKeyEvent event) {
                             // 监听Ctrl+V或Command+V
                             if (event is RawKeyDownEvent) {
@@ -1574,6 +1575,7 @@ class _DraggableChatInputState extends State<DraggableChatInput> {
   @override
   void dispose() {
     _controller.dispose();
+    _keyboardFocusNode.dispose(); // 释放焦点节点
 
     // 移除录音状态监听器
     VoiceRecorder().removeRecordingListener(_onRecordingStateChanged);

@@ -2,10 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:frontend/common/api.dart';
 
 class EmailRegisterService {
-  static String generateLocalCode() {
-    final rand = List.generate(6, (index) => (DateTime.now().millisecondsSinceEpoch + index * 43) % 10);
-    return rand.join();
-  }
+  // 此方法已不再使用，验证码由后端生成和验证
 
   // 检查邮箱是否已注册
   static Future<Map<String, dynamic>> checkEmailExists(String email) async {
@@ -37,7 +34,13 @@ class EmailRegisterService {
       }
 
       // 发送验证码
-      final response = await Api.getVerificationCode(type: 'email', target: email);
+      final response = await Api.getVerificationCode(email: email, type: 'register');
+
+      // 如果返回验证码类型错误，尝试使用默认类型
+      if (response['success'] == false && response['msg'] == '验证码类型错误') {
+        return await Api.getVerificationCode(email: email);
+      }
+
       return response;
     } catch (e) {
       debugPrint('发送邮箱验证码异常: $e');

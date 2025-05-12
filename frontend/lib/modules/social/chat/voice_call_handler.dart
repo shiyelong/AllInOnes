@@ -356,8 +356,8 @@ class VoiceCallHandler {
       // 同时保存到LocalMessageStorage
       try {
         await LocalMessageStorage.saveMessage(
-          int.parse(userId),
-          int.parse(targetId),
+          userId,
+          targetId,
           message
         );
       } catch (e) {

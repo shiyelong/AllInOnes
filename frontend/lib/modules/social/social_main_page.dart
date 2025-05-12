@@ -723,6 +723,7 @@ class _SocialMainPageState extends State<SocialMainPage> {
   }
 
   Widget buildMobile() {
+    try {
     // 移动端主导航悬浮左侧，底部为子导航栏，“我的”固定底部右侧，支持隐藏
     bool navOpen = true;
     return StatefulBuilder(
@@ -1111,6 +1112,32 @@ class _SocialMainPageState extends State<SocialMainPage> {
         );
       }
     );
+    } catch (e) {
+      debugPrint('[SocialMainPage] 构建移动版界面时出错: $e');
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.error_outline, color: Colors.red, size: 48),
+              SizedBox(height: 16),
+              Text('加载界面时出错', style: TextStyle(fontSize: 18)),
+              SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: () {
+                  setState(() {
+                    // 重置为默认标签
+                    mainTabIndex = 0;
+                    subTabIndex = 0;
+                  });
+                },
+                child: Text('重试'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
   }
 
   Widget _buildMainContent() {

@@ -4,31 +4,49 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-// 自定义录音器类，避免使用抽象类 Record
+// 录音器类
+// 注意：这是一个临时实现，需要替换为实际的录音功能
+// TODO: 使用flutter_sound或record包实现真实录音功能
 class AudioRecorder {
+  bool _isRecording = false;
+  String? _currentPath;
+
+  // 检查是否正在录音
   Future<bool> isRecording() async {
-    return false;
+    return _isRecording;
   }
 
+  // 开始录音
   Future<void> start({
     required String path,
     AudioEncoder encoder = AudioEncoder.aacLc,
     int bitRate = 128000,
     int samplingRate = 44100,
   }) async {
-    // 模拟录音功能
+    // 实际应用中应该使用真实的录音API
     debugPrint('[AudioRecorder] 开始录音: $path');
+    _isRecording = true;
+    _currentPath = path;
+
+    // 创建一个空文件作为占位符
+    final file = File(path);
+    if (!await file.exists()) {
+      await file.create(recursive: true);
+    }
   }
 
+  // 停止录音
   Future<String?> stop() async {
-    // 模拟停止录音
     debugPrint('[AudioRecorder] 停止录音');
-    return null;
+    _isRecording = false;
+    return _currentPath;
   }
 
+  // 释放资源
   void dispose() {
-    // 释放资源
     debugPrint('[AudioRecorder] 释放资源');
+    _isRecording = false;
+    _currentPath = null;
   }
 }
 

@@ -43,16 +43,8 @@ class PhoneRegisterController extends ChangeNotifier {
       final response = await PhoneRegisterService.sendVerificationCode(phone);
 
       if (response['success'] == true) {
-        // 如果后端返回了验证码（开发环境），保存它
-        if (response['code'] != null) {
-          generatedCode = response['code'];
-        } else if (response['data']?['verification_code'] != null) {
-          generatedCode = response['data']['verification_code'];
-        } else {
-          // 否则生成本地验证码（仅用于模拟）
-          generatedCode = PhoneRegisterService.generateLocalCode();
-        }
-        debugPrint('手机验证码: $generatedCode');
+        // 验证码已发送到用户手机
+        debugPrint('验证码已发送到用户手机');
       } else {
         error = response['msg'] ?? '发送验证码失败';
       }

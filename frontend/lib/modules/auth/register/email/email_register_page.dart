@@ -127,12 +127,12 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
                                       content: Column(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Text('模拟邮箱验证码:'),
+                                          Text('验证码已发送到您的邮箱'),
                                           SizedBox(height: 10),
                                           Text(
-                                            controller.generatedCode,
+                                            '请查看邮箱',
                                             style: TextStyle(
-                                              fontSize: 24,
+                                              fontSize: 16,
                                               fontWeight: FontWeight.bold,
                                               color: Colors.blue,
                                             ),
@@ -140,14 +140,7 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
                                         ],
                                       ),
                                       actions: [
-                                        TextButton(
-                                          onPressed: () {
-                                            // 自动填充验证码
-                                            codeCtrl.text = controller.generatedCode;
-                                            Navigator.pop(context);
-                                          },
-                                          child: Text('自动填充'),
-                                        ),
+
                                         TextButton(
                                           onPressed: () => Navigator.pop(context),
                                           child: Text('关闭'),

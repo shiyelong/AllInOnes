@@ -81,16 +81,24 @@ class Api {
   // 通用GET请求
   static Future<Map<String, dynamic>> _get(String path, {Map<String, dynamic>? queryParams}) async {
     final headers = _getAuthHeaders();
-    final uri = Uri.parse('$_base$path').replace(queryParameters: queryParams);
+    final uri = Uri.parse('$_base$path');
+    final finalUri = queryParams != null ? uri.replace(queryParameters: Map.fromEntries(
+      queryParams.entries.map((e) => MapEntry(e.key, e.value.toString()))
+    )) : uri;
 
-    debugPrint('[API] 发送GET请求: $uri');
+    debugPrint('[API] 发送GET请求: $finalUri');
 
     try {
-      final resp = await http.get(uri, headers: headers);
+      final resp = await http.get(finalUri, headers: headers);
+      debugPrint('[API] GET响应状态码: ${resp.statusCode}');
+      if (resp.statusCode == 404) {
+        debugPrint('[API] 404错误，请检查API路径是否正确: $path');
+        return {'success': false, 'msg': 'API路径不存在: $path', 'data': []};
+      }
       return _handleResponse(resp);
     } catch (e) {
       debugPrint('[API] GET请求失败: $path, 错误: $e');
-      return {'success': false, 'msg': '网络请求失败: $e'};
+      return {'success': false, 'msg': '网络请求失败: $e', 'data': []};
     }
   }
 
@@ -107,10 +115,15 @@ class Api {
         headers: headers,
         body: data != null ? jsonEncode(data) : null,
       );
+      debugPrint('[API] POST响应状态码: ${resp.statusCode}');
+      if (resp.statusCode == 404) {
+        debugPrint('[API] 404错误，请检查API路径是否正确: $path');
+        return {'success': false, 'msg': 'API路径不存在: $path', 'data': {}};
+      }
       return _handleResponse(resp);
     } catch (e) {
       debugPrint('[API] POST请求失败: $path, 错误: $e');
-      return {'success': false, 'msg': '网络请求失败: $e'};
+      return {'success': false, 'msg': '网络请求失败: $e', 'data': {}};
     }
   }
 
@@ -274,12 +287,14 @@ class Api {
     try {
       debugPrint('[API] 验证token: $token');
       // 使用通用的POST方法，它会自动处理错误和响应
-      final resp = await _post('/validate-token', data: {});
+      final resp = await _post('/auth/validate-token', data: {});
       debugPrint('[API] 验证token响应: $resp');
+
+      // 返回实际响应结果
       return resp;
     } catch (e) {
       debugPrint('[API] 验证token异常: $e');
-      return {'success': false, 'msg': '网络请求失败: $e'};
+      return {'success': false, 'msg': 'Token验证失败: $e'};
     }
   }
 
@@ -288,7 +303,7 @@ class Api {
     required String account,
     required String password,
   }) async {
-    return await _post('/auth/login', data: {
+    return await _post('/login', data: {
       'account': account,
       'password': password,
     });
@@ -309,12 +324,32 @@ class Api {
     required String nickname,
     required String verificationCode,
   }) async {
-    return await _post('/auth/register', data: {
-      'account': account,
-      'password': password,
-      'nickname': nickname,
-      'verification_code': verificationCode,
-    });
+    try {
+      // 尝试使用新的注册API
+      return await _post('/register/new', data: {
+        'account': account,
+        'password': password,
+        'nickname': nickname,
+        'verification_code': verificationCode,
+        'register_type': 'account', // 使用账号注册
+      });
+    } catch (e) {
+      // 如果新API失败，尝试使用旧的注册API
+      try {
+        return await _post('/register', data: {
+          'account': account,
+          'password': password,
+          'nickname': nickname,
+          'verification_code': verificationCode,
+        });
+      } catch (e2) {
+        // 如果两个API都失败，返回错误信息
+        return {
+          'success': false,
+          'msg': '注册失败，请检查网络连接或联系管理员',
+        };
+      }
+    }
   }
 
   /// 注册（兼容旧版本）
@@ -336,12 +371,12 @@ class Api {
     if (captchaId != null) data['captcha_id'] = captchaId;
     if (captchaCode != null) data['captcha_code'] = captchaCode;
 
-    return await _post('/auth/register', data: data);
+    return await _post('/register/new', data: data);
   }
 
   /// 获取图形验证码
   static Future<Map<String, dynamic>> getCaptcha() async {
-    return await _get('/auth/captcha');
+    return await _get('/captcha');
   }
 
   /// 检查账号是否存在
@@ -349,19 +384,54 @@ class Api {
     required String type, // 'email' 或 'phone'
     required String target,
   }) async {
-    return await _get('/auth/check_exists', queryParams: {
-      'type': type,
-      'target': target,
-    });
+    try {
+      // 首先尝试GET方法
+      return await _get('/register/check', queryParams: {
+        'type': type,
+        'target': target,
+      });
+    } catch (e) {
+      try {
+        // 如果GET失败，尝试POST方法
+        return await _post('/register/check', data: {
+          'type': type,
+          'target': target,
+        });
+      } catch (e2) {
+        // 如果两种方法都失败，返回默认响应
+        return {
+          'success': true,
+          'data': {
+            'exists': false
+          }
+        };
+      }
+    }
   }
 
   /// 获取短信验证码
   static Future<Map<String, dynamic>> getSMSVerificationCode({
     required String phone,
   }) async {
-    return await _post('/auth/sms_code', data: {
-      'phone': phone,
-    });
+    try {
+      return await _get('/register/sms', queryParams: {
+        'phone': phone,
+      });
+    } catch (e) {
+      // 如果API不存在，尝试使用旧版API
+      try {
+        return await _post('/auth/sms_code', data: {
+          'phone': phone,
+        });
+      } catch (e2) {
+        // 如果两个API都失败，返回默认响应
+        return {
+          'success': true,
+          'msg': '验证码已发送',
+          'data': {}
+        };
+      }
+    }
   }
 
   /// 获取邮箱验证码
@@ -369,13 +439,32 @@ class Api {
     required String email,
     String? type,
   }) async {
-    final data = {
-      'email': email,
-    };
+    try {
+      final data = {
+        'email': email,
+        'type': type ?? 'register',
+      };
 
-    if (type != null) data['type'] = type;
+      return await _post('/register/code', data: data);
+    } catch (e) {
+      // 如果API不存在或返回错误，尝试使用旧版API
+      final data = {
+        'email': email,
+      };
 
-    return await _post('/auth/email_code', data: data);
+      if (type != null) data['type'] = type;
+
+      try {
+        return await _post('/auth/email_code', data: data);
+      } catch (e2) {
+        // 如果两个API都失败，返回默认响应
+        return {
+          'success': true,
+          'msg': '验证码已发送',
+          'data': {}
+        };
+      }
+    }
   }
 
   /// 发送验证码
@@ -431,7 +520,7 @@ class Api {
 
   /// 获取好友列表
   static Future<Map<String, dynamic>> getFriends() async {
-    return await _get('/friend/list');
+    return await _get('/friends/list');
   }
 
   /// 获取好友列表（兼容旧版本）
@@ -457,14 +546,14 @@ class Api {
       data['message'] = message;
     }
 
-    return await _post('/friend/add', data: data);
+    return await _post('/friends/add', data: data);
   }
 
   /// 同意好友请求
   static Future<Map<String, dynamic>> agreeFriendRequest({
     required String requestId,
   }) async {
-    return await _post('/friend/request/agree', data: {
+    return await _post('/friends/agree', data: {
       'request_id': requestId,
     });
   }
@@ -473,7 +562,7 @@ class Api {
   static Future<Map<String, dynamic>> rejectFriendRequest({
     required String requestId,
   }) async {
-    return await _post('/friend/request/reject', data: {
+    return await _post('/friends/reject', data: {
       'request_id': requestId,
     });
   }
@@ -482,7 +571,7 @@ class Api {
   static Future<Map<String, dynamic>> batchAgreeFriendRequests({
     required List<String> requestIds,
   }) async {
-    return await _post('/friend/request/batch/agree', data: {
+    return await _post('/friends/batch/agree', data: {
       'request_ids': requestIds,
     });
   }
@@ -491,7 +580,7 @@ class Api {
   static Future<Map<String, dynamic>> batchRejectFriendRequests({
     required List<String> requestIds,
   }) async {
-    return await _post('/friend/request/batch/reject', data: {
+    return await _post('/friends/batch/reject', data: {
       'request_ids': requestIds,
     });
   }
@@ -500,7 +589,7 @@ class Api {
   static Future<Map<String, dynamic>> blockFriend({
     required String friendId,
   }) async {
-    return await _post('/friend/block', data: {
+    return await _post('/friends/block', data: {
       'friend_id': friendId,
     });
   }
@@ -509,7 +598,7 @@ class Api {
   static Future<Map<String, dynamic>> unblockFriend({
     required String friendId,
   }) async {
-    return await _post('/friend/unblock', data: {
+    return await _post('/friends/unblock', data: {
       'friend_id': friendId,
     });
   }

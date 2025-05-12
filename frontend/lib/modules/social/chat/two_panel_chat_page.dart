@@ -173,7 +173,7 @@ class _TwoPanelChatPageState extends State<TwoPanelChatPage> {
         }
       }
 
-      final chats = await ChatService.fetchRecentChats(userId ?? 0);
+      final chats = await ChatService.fetchRecentChats(userId?.toString() ?? "0");
       setState(() {
         _recentChats = chats;
         _loadingChats = false;
@@ -291,7 +291,7 @@ class _TwoPanelChatPageState extends State<TwoPanelChatPage> {
     });
 
     try {
-      final success = await ChatService.sendMessage(chatId, text);
+      final success = await ChatService.sendMessage(chatId.toString(), text);
 
       if (success) {
         // 刷新消息列表

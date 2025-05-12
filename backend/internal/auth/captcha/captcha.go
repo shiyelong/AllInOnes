@@ -16,8 +16,8 @@ var store = base64Captcha.DefaultMemStore
 
 // GetCaptcha 获取验证码
 func GetCaptcha(c *gin.Context) {
-	// 在测试环境中，我们使用一个随机的数学表达式或字母数字组合
-	if c.Query("test") == "1" || true { // 始终使用测试模式
+	// 检查是否为开发环境
+	if gin.Mode() == gin.DebugMode {
 		// 生成一个随机的验证码ID
 		id := "captcha_id_" + time.Now().Format("20060102150405")
 

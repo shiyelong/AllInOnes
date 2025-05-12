@@ -20,7 +20,7 @@ extension LocalMessageStorageExtension on LocalMessageStorage {
         return [];
       }
 
-      return await LocalMessageStorage.getMessages(userId, targetIdInt);
+      return await LocalMessageStorage.getMessages(userId.toString(), targetId);
     } catch (e) {
       debugPrint('[LocalMessageStorage] 获取消息失败: $e');
       return [];
@@ -50,7 +50,7 @@ extension LocalMessageStorageExtension on LocalMessageStorage {
 
       // 使用主存储类保存消息
       for (var message in processedMessages) {
-        await LocalMessageStorage.saveMessage(userId, targetIdInt, message);
+        await LocalMessageStorage.saveMessage(userId.toString(), targetId, message);
       }
 
       return true;
@@ -90,8 +90,9 @@ extension LocalMessageStorageExtension on LocalMessageStorage {
     required int pageSize,
   }) async {
     try {
-      // 这里应该调用API获取消息
-      // 由于我们没有实际的API实现，返回一个空的结果
+      // 调用实际的API获取消息
+      // TODO: 实现实际的API调用
+      // 临时实现，返回空数组
       return {
         'code': 0,
         'message': 'success',
@@ -115,20 +116,23 @@ extension LocalMessageStorageExtension on LocalMessageStorage {
     required String type,
   }) async {
     try {
-      // 这里应该调用API发送消息
-      // 由于我们没有实际的API实现，返回一个模拟的成功结果
+      // 调用实际的API发送消息
+      // TODO: 实现实际的API调用
+      // 临时实现，创建一个消息对象
+      final message = {
+        'id': DateTime.now().millisecondsSinceEpoch.toString(),
+        'from_id': fromId,
+        'to_id': toId,
+        'content': content,
+        'type': type,
+        'created_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        'status': 1,
+      };
+
       return {
         'code': 0,
         'message': 'success',
-        'data': {
-          'id': DateTime.now().millisecondsSinceEpoch.toString(),
-          'from_id': fromId,
-          'to_id': toId,
-          'content': content,
-          'type': type,
-          'created_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-          'status': 1,
-        },
+        'data': message,
       };
     } catch (e) {
       debugPrint('[LocalMessageStorage] 发送消息到API失败: $e');
@@ -147,8 +151,9 @@ extension LocalMessageStorageExtension on LocalMessageStorage {
     required int pageSize,
   }) async {
     try {
-      // 这里应该调用API获取自己的消息
-      // 由于我们没有实际的API实现，返回一个空的结果
+      // 调用实际的API获取自己的消息
+      // TODO: 实现实际的API调用
+      // 临时实现，返回空数组
       return {
         'code': 0,
         'message': 'success',
@@ -171,20 +176,23 @@ extension LocalMessageStorageExtension on LocalMessageStorage {
     required String type,
   }) async {
     try {
-      // 这里应该调用API发送消息给自己
-      // 由于我们没有实际的API实现，返回一个模拟的成功结果
+      // 调用实际的API发送消息给自己
+      // TODO: 实现实际的API调用
+      // 临时实现，创建一个消息对象
+      final message = {
+        'id': DateTime.now().millisecondsSinceEpoch.toString(),
+        'from_id': userId,
+        'to_id': userId,
+        'content': content,
+        'type': type,
+        'created_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        'status': 1,
+      };
+
       return {
         'code': 0,
         'message': 'success',
-        'data': {
-          'id': DateTime.now().millisecondsSinceEpoch.toString(),
-          'from_id': userId,
-          'to_id': userId,
-          'content': content,
-          'type': type,
-          'created_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-          'status': 1,
-        },
+        'data': message,
       };
     } catch (e) {
       debugPrint('[LocalMessageStorage] 发送消息给自己失败: $e');

@@ -3,6 +3,7 @@ package controllers
 import (
 	"allinone_backend/models"
 	"allinone_backend/repositories"
+	"allinone_backend/utils"
 	"strconv"
 	"strings"
 	"time"
@@ -55,7 +56,26 @@ func SendMessage(c *gin.Context) {
 		return
 	}
 
-	// TODO: WebSocket 推送实时消息
+	// 通过WebSocket推送实时消息
+	// 使用WebSocketManager发送消息
+	// 注意：实际部署时需要确保WebSocket服务已正确配置
+	// 这里我们使用utils.PushMessageToUser函数发送消息
+	go func() {
+		// 构造消息
+		wsMessage := map[string]any{
+			"type": "new_message",
+			"data": map[string]any{
+				"id":         message.ID,
+				"from_id":    message.SenderID,
+				"to_id":      message.ReceiverID,
+				"content":    message.Content,
+				"type":       message.Type,
+				"created_at": message.CreatedAt,
+			},
+		}
+		// 发送消息到接收者
+		utils.PushMessageToUser(uint(toID), wsMessage)
+	}()
 
 	c.JSON(200, gin.H{
 		"success": true,
@@ -238,7 +258,37 @@ func GroupChat(c *gin.Context) {
 	groupMember.IsActive = true
 	db.Save(&groupMember)
 
-	// TODO: WebSocket 推送实时消息
+	// 通过WebSocket推送实时消息
+	// 向群组所有成员推送消息
+	go func() {
+		// 查询群组所有成员
+		var groupMembers []models.GroupMember
+		db.Where("group_id = ?", req.GroupID).Find(&groupMembers)
+
+		// 构造消息
+		wsMessage := map[string]any{
+			"type": "new_group_message",
+			"data": map[string]any{
+				"id":              message.ID,
+				"sender_id":       message.SenderID,
+				"group_id":        message.GroupID,
+				"content":         message.Content,
+				"type":            message.Type,
+				"extra":           message.Extra,
+				"mentioned_users": message.MentionedUsers,
+				"status":          message.Status,
+				"created_at":      message.CreatedAt,
+			},
+		}
+
+		// 向每个群成员推送消息
+		for _, member := range groupMembers {
+			// 不向发送者推送消息
+			if member.UserID != userID.(uint) {
+				utils.PushMessageToUser(member.UserID, wsMessage)
+			}
+		}
+	}()
 
 	c.JSON(200, gin.H{
 		"success": true,

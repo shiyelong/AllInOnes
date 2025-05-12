@@ -274,7 +274,7 @@ class _EnhancedChatInputState extends State<EnhancedChatInput> {
           MaterialPageRoute(
             builder: (context) => EnhancedVideoCallPage(
               userId: userInfo.id,
-              peerId: int.parse(widget.targetId ?? '0'),
+              peerId: widget.targetId ?? '0',
               peerName: widget.targetName ?? '未知用户',
               peerAvatar: widget.targetAvatar ?? '',
               isOutgoing: true,
@@ -318,7 +318,7 @@ class _EnhancedChatInputState extends State<EnhancedChatInput> {
           MaterialPageRoute(
             builder: (context) => EnhancedVideoCallPage(
               userId: userInfo.id,
-              peerId: int.parse(widget.targetId ?? '0'),
+              peerId: widget.targetId ?? '0',
               peerName: widget.targetName ?? '未知用户',
               peerAvatar: widget.targetAvatar ?? '',
               isOutgoing: true,

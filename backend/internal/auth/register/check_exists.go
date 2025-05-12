@@ -10,17 +10,48 @@ import (
 
 // CheckExistsRequest 检查邮箱/手机号是否存在的请求
 type CheckExistsRequest struct {
-	Type   string `json:"type" binding:"required"` // "email" 或 "phone"
+	Type   string `json:"type" binding:"required"`   // "email" 或 "phone"
 	Target string `json:"target" binding:"required"` // 邮箱或手机号
 }
 
 // CheckExistsHandler 检查邮箱/手机号是否已注册
 func CheckExistsHandler(c *gin.Context) {
+	// 支持GET和POST两种方式
 	var req CheckExistsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+
+	// 检查请求方法
+	if c.Request.Method == "GET" {
+		req.Type = c.Query("type")
+		req.Target = c.Query("target")
+	} else {
+		// 尝试从JSON绑定
+		if err := c.ShouldBindJSON(&req); err != nil {
+			// 如果JSON绑定失败，尝试从表单获取
+			req.Type = c.PostForm("type")
+			req.Target = c.PostForm("target")
+
+			// 如果表单也没有，检查是否有email或phone参数
+			if req.Type == "" || req.Target == "" {
+				email := c.PostForm("email")
+				if email != "" {
+					req.Type = "email"
+					req.Target = email
+				} else {
+					phone := c.PostForm("phone")
+					if phone != "" {
+						req.Type = "phone"
+						req.Target = phone
+					}
+				}
+			}
+		}
+	}
+
+	// 验证参数
+	if req.Type == "" || req.Target == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"msg":     "参数错误",
+			"msg":     "参数错误，需要type和target",
 		})
 		return
 	}

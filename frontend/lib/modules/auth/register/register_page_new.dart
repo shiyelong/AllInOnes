@@ -620,6 +620,11 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   // 注册方法
+  // 处理用户注册流程，包括:
+  // 1. 验证用户输入的账号、密码和验证码
+  // 2. 调用后端API进行注册
+  // 3. 处理注册成功或失败的逻辑
+  // 4. 注册成功后自动跳转到登录页面
   Future<void> _register() async {
     // 清除之前的错误信息
     setState(() {
@@ -680,16 +685,47 @@ class _RegisterPageState extends State<RegisterPage> {
           _registerSuccess = true;
         });
 
+        // 打印注册成功信息
+        print('注册成功，账号信息: ${resp['data']}');
+
+        // 打印详细的跳转信息
+        print('准备跳转到登录页面，延迟1200毫秒');
+
         // 短暂延迟后跳转
         await Future.delayed(Duration(milliseconds: 1200));
 
         if (mounted) {
-          // 跳转到登录页并传递账号密码
-          Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false, arguments: {
-            'forcePwdTab': true,
-            'account': accountCtrl.text,
-            'password': pwdCtrl.text,
-          });
+          // 获取注册返回的账号信息
+          String account = resp['data']?['account'] ?? accountCtrl.text;
+          print('跳转参数: account=$account, password=${pwdCtrl.text.replaceAll(RegExp(r'.'), '*')}');
+
+          try {
+            // 保存账号信息到最近账号列表
+            await RecentAccountsManager.addAccount(
+              account: account,
+              generatedEmail: resp['data']?['generated_email'] ?? '',
+            );
+            print('已保存账号到最近账号列表');
+
+            // 跳转到登录页并传递账号密码
+            print('执行跳转: pushNamedAndRemoveUntil(/login)');
+            Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false, arguments: {
+              'forcePwdTab': true,
+              'account': account,
+              'password': pwdCtrl.text,
+            });
+            print('跳转命令已执行');
+          } catch (e) {
+            print('跳转过程中发生异常: $e');
+            // 如果出现异常，尝试使用替代方法跳转
+            Navigator.pushReplacementNamed(context, '/login', arguments: {
+              'forcePwdTab': true,
+              'account': account,
+              'password': pwdCtrl.text,
+            });
+          }
+        } else {
+          print('组件已卸载，无法执行跳转');
         }
       } else {
         // 注册失败

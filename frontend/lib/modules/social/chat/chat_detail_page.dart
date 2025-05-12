@@ -535,8 +535,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
         // 同时更新LocalMessageStorage
         try {
           await LocalMessageStorage.saveMessage(
-            int.parse(widget.userId),
-            int.parse(widget.targetId),
+            widget.userId,
+            widget.targetId,
             {
               'id': messageId,
               'from_id': message['from_id'],

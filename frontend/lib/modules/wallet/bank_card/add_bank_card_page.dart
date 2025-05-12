@@ -68,12 +68,7 @@ class _AddBankCardPageState extends State<AddBankCardPage> {
   @override
   void initState() {
     super.initState();
-    // 预设测试手机号
-    _phoneNumberController.text = '15210888310';
-    // 预设测试身份证号
-    _idNumberController.text = '110101199001011234';
-    // 预设持卡人姓名
-    _cardholderNameController.text = '张三';
+    // 初始化表单
   }
 
   @override
@@ -223,50 +218,38 @@ class _AddBankCardPageState extends State<AddBankCardPage> {
           Navigator.of(context).pop(true);
         }
       } else {
-        // 如果API调用也失败，模拟成功
-        debugPrint('API添加银行卡失败，模拟成功: ${response['msg']}');
+        // 如果API调用失败，显示错误信息
+        debugPrint('API添加银行卡失败: ${response['msg']}');
 
         setState(() {
           _isLoading = false;
-          _success = true;
+          _errorMessage = response['msg'] ?? '添加银行卡失败，请稍后重试';
         });
 
-        // 显示成功消息
+        // 显示错误消息
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('银行卡添加成功（模拟）'),
-            backgroundColor: Colors.green,
+            content: Text(_errorMessage ?? '添加银行卡失败，请稍后重试'),
+            backgroundColor: Colors.red,
           ),
         );
-
-        // 延迟后返回上一页
-        await Future.delayed(Duration(seconds: 2));
-        if (mounted) {
-          Navigator.of(context).pop(true);
-        }
       }
     } catch (e) {
       debugPrint('添加银行卡异常: $e');
 
-      // 模拟成功
+      // 显示错误信息
       setState(() {
         _isLoading = false;
-        _success = true;
+        _errorMessage = '添加银行卡失败: $e';
       });
 
-      // 显示成功消息
+      // 显示错误消息
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('银行卡添加成功（模拟）'),
-          backgroundColor: Colors.green,
+          content: Text('添加银行卡失败，请稍后重试'),
+          backgroundColor: Colors.red,
         ),
       );
-
-      // 延迟后返回上一页
-      await Future.delayed(Duration(seconds: 2));
-      if (mounted) {
-        Navigator.of(context).pop(true);
-      }
     }
   }
 
@@ -581,9 +564,6 @@ class _AddBankCardPageState extends State<AddBankCardPage> {
                     }
                     if (value.length != 11) {
                       return '手机号应为11位';
-                    }
-                    if (value != '15210888310') {
-                      return '请使用15210888310进行测试';
                     }
                     return null;
                   },

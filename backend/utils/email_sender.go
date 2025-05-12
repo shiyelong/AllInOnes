@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/smtp"
 	"strings"
+
+	"github.com/gin-gonic/gin"
 )
 
 // 邮件配置
@@ -39,8 +41,8 @@ func init() {
 		From:     "126970540@outlook.com", // 发送邮箱
 	}
 
-	// 在测试环境中，我们使用一个简单的方法来模拟邮件发送
-	fmt.Println("邮件服务初始化完成，发送邮箱：126970540@outlook.com，目标邮箱：1269705430@qq.com")
+	// 初始化邮件服务
+	fmt.Println("邮件服务初始化完成，发送邮箱：126970540@outlook.com")
 }
 
 // 设置邮件配置
@@ -85,8 +87,10 @@ func SendVerificationEmail(to, code string) error {
 	codeKey := fmt.Sprintf("email:%s", to)
 	SaveVerificationCode(codeKey, code)
 
-	// 打印验证码，方便测试
-	fmt.Printf("验证码已生成 - 目标邮箱: %s, 验证码: %s\n", to, code)
+	// 在开发环境中打印验证码，方便调试
+	if gin.Mode() == gin.DebugMode {
+		fmt.Printf("验证码已生成 - 目标邮箱: %s, 验证码: %s\n", to, code)
+	}
 
 	// 构建邮件内容
 	subject := "验证码 - 您的账号注册"
@@ -105,13 +109,15 @@ func SendVerificationEmail(to, code string) error {
 	err := SendEmail(to, subject, body)
 	if err != nil {
 		fmt.Printf("发送邮件失败: %v\n", err)
-		fmt.Printf("将使用模拟验证码: %s\n", code)
 
 		// 即使发送失败，我们也返回nil，表示验证码已生成
 		return nil
 	}
 
-	fmt.Printf("邮件发送成功，验证码: %s\n", code)
+	// 在开发环境中打印成功信息
+	if gin.Mode() == gin.DebugMode {
+		fmt.Printf("邮件发送成功，验证码: %s\n", code)
+	}
 	return nil
 }
 

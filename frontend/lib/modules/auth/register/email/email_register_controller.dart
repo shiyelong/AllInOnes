@@ -43,14 +43,8 @@ class EmailRegisterController extends ChangeNotifier {
       final response = await EmailRegisterService.sendVerificationCode(email);
 
       if (response['success'] == true) {
-        // 如果后端返回了验证码（开发环境），保存它
-        if (response['code'] != null) {
-          generatedCode = response['code'];
-        } else {
-          // 否则生成本地验证码（仅用于模拟）
-          generatedCode = EmailRegisterService.generateLocalCode();
-        }
-        debugPrint('邮箱验证码: $generatedCode');
+        // 验证码已发送到用户邮箱
+        debugPrint('验证码已发送到用户邮箱');
       } else {
         error = response['msg'] ?? '发送验证码失败';
       }

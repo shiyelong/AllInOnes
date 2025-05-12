@@ -35,29 +35,41 @@ class _AutoLoginGateState extends State<AutoLoginGate> {
       if (!mounted) return;
 
       if (token != null && token.isNotEmpty) {
-        // 验证token有效性
-        debugPrint('[AutoLoginGate] 验证token有效性');
-        final validationResult = await Api.validateToken(token);
-        debugPrint('[AutoLoginGate] 验证结果: $validationResult');
+        try {
+          // 验证token有效性
+          debugPrint('[AutoLoginGate] 验证token有效性');
+          final validationResult = await Api.validateToken(token);
+          debugPrint('[AutoLoginGate] 验证结果: $validationResult');
 
-        final isValid = validationResult['success'] == true;
+          final isValid = validationResult['success'] == true;
 
-        if (!mounted) return;
+          if (!mounted) return;
 
-        setState(() {
-          _token = isValid ? token : null;
-          _checking = false;
-        });
-
-        if (isValid) {
-          debugPrint('[AutoLoginGate] token有效，跳转/social');
-          Future.microtask(() {
-            if (mounted) {
-              Navigator.of(context).pushReplacementNamed('/social');
-            }
+          setState(() {
+            _token = isValid ? token : null;
+            _checking = false;
           });
-        } else {
-          debugPrint('[AutoLoginGate] token无效，清除token并停留在登录页');
+
+          if (isValid) {
+            debugPrint('[AutoLoginGate] token有效，跳转/social');
+            Future.microtask(() {
+              if (mounted) {
+                Navigator.of(context).pushReplacementNamed('/social');
+              }
+            });
+          } else {
+            debugPrint('[AutoLoginGate] token无效，清除token并停留在登录页');
+            await Persistence.clearToken();
+          }
+        } catch (e) {
+          // 如果验证过程中出错，假设token无效
+          debugPrint('[AutoLoginGate] 验证token时出错: $e');
+          if (mounted) {
+            setState(() {
+              _token = null;
+              _checking = false;
+            });
+          }
           await Persistence.clearToken();
         }
       } else {

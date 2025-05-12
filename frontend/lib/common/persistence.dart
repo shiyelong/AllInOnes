@@ -4,9 +4,9 @@ import 'dart:convert';
 import 'api.dart';
 import 'text_sanitizer.dart';
 
-// ?????
+/// ?????
 class UserInfo {
-  final int id;
+  final String id;
   final String account;
   final String? nickname;
   final String? avatar;
@@ -25,20 +25,22 @@ class UserInfo {
     this.phone,
     this.gender,
     this.generatedEmail,
-    this.token, // ??token??
+    this.token, // ??token
   });
 
   factory UserInfo.fromJson(Map<String, dynamic> json) {
-    // ??ID?????
-    int userId;
-    if (json['id'] is String) {
-      userId = int.tryParse(json['id']) ?? 0;
+    // ??ID???????
+    String userId;
+    if (json['id'] == null) {
+      userId = '0';
+    } else if (json['id'] is int) {
+      userId = json['id'].toString();
     } else {
-      userId = json['id'] ?? 0;
+      userId = json['id'].toString();
     }
 
-    // ??gender?????
-    int? userGender;
+    // ??gender???????
+    dynamic userGender;
     if (json['gender'] != null) {
       if (json['gender'] is String) {
         userGender = int.tryParse(json['gender']) ?? 0;
@@ -47,16 +49,24 @@ class UserInfo {
       }
     }
 
+    // ??nickname?????null
+    String? userNickname;
+    if (json['nickname'] != null) {
+      userNickname = TextSanitizer.sanitize(json['nickname'].toString());
+    } else {
+      userNickname = json['account']?.toString() ?? '??';
+    }
+
     return UserInfo(
       id: userId,
-      account: json['account'] ?? '',
-      nickname: TextSanitizer.sanitize(json['nickname']),
-      avatar: json['avatar'],
-      email: json['email'],
-      phone: json['phone'],
+      account: json['account']?.toString() ?? '',
+      nickname: userNickname,
+      avatar: json['avatar']?.toString(),
+      email: json['email']?.toString(),
+      phone: json['phone']?.toString(),
       gender: userGender,
-      generatedEmail: json['generated_email'],
-      token: json['token'], // ??token
+      generatedEmail: json['generated_email']?.toString(),
+      token: json['token']?.toString(), // ??token
     );
   }
 
@@ -64,7 +74,7 @@ class UserInfo {
     return {
       'id': id,
       'account': account,
-      'nickname': TextSanitizer.sanitize(nickname),
+      'nickname': nickname != null ? TextSanitizer.sanitize(nickname!) : '??',
       'avatar': avatar,
       'email': email,
       'phone': phone,
@@ -107,11 +117,11 @@ class Persistence {
   static String? _cachedToken;
 
   static String? getToken() {
-    debugPrint('[Persistence] 获取token缓存值: $_cachedToken');
+    debugPrint('[Persistence] ??token???: $_cachedToken');
     return _cachedToken;
   }
 
-  /// 检查用户是否已登录
+  /// ?????????
   static bool isLoggedIn() {
     final token = getToken();
     return token != null && token.isNotEmpty;

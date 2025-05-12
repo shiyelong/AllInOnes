@@ -68,39 +68,21 @@ func localSpeechToText(audioFilePath string) (string, error) {
 
 // freeSpeechToTextAPI 使用免费API进行语音识别
 func freeSpeechToTextAPI(audioFilePath string) (string, error) {
-	// 读取音频文件
-	audioData, err := os.ReadFile(audioFilePath)
+	// 检查文件是否存在
+	_, err := os.Stat(audioFilePath)
 	if err != nil {
-		return "", fmt.Errorf("读取音频文件失败: %v", err)
+		return "", fmt.Errorf("音频文件不存在: %v", err)
 	}
 
-	// 这里使用模拟的API调用
-	// 在实际应用中，你需要替换为真实的API调用
+	// 使用实际的API调用
+	// 这里应该集成真实的语音识别API
 	// 例如百度语音识别API、讯飞语音识别API等
 
-	// 模拟API调用
-	// 在实际应用中，这里应该是发送HTTP请求到API服务
-	text := simulateSpeechRecognition(audioData)
-
-	return text, nil
+	// 临时返回错误，提示需要配置API
+	return "", errors.New("需要配置语音识别API")
 }
 
-// simulateSpeechRecognition 模拟语音识别
-// 在实际应用中，这个函数应该被替换为真实的API调用
-func simulateSpeechRecognition(audioData []byte) string {
-	// 这里只是一个模拟，返回固定文本
-	// 在实际应用中，应该发送HTTP请求到API服务
-
-	// 根据音频数据长度生成一些随机文本
-	length := len(audioData)
-	if length < 1000 {
-		return "你好，这是一条短语音消息。"
-	} else if length < 10000 {
-		return "你好，这是一条中等长度的语音消息。我正在测试语音转文字功能。"
-	} else {
-		return "你好，这是一条较长的语音消息。我正在测试语音转文字功能。这个功能可以将语音自动转换为文字，方便用户阅读和搜索。希望这个功能对你有帮助。"
-	}
-}
+// 实际应用中应该实现真实的语音识别API调用
 
 // getFileExtension 获取文件扩展名
 func getFileExtension(filePath string) string {
@@ -117,104 +99,19 @@ func getFileExtension(filePath string) string {
 func baiduSpeechToText(audioData []byte) (string, error) {
 	// 这里应该是实际的百度API调用
 	// 需要替换为你自己的API密钥和配置
-
-	// 模拟API调用
-	type BaiduResponse struct {
-		ErrorCode int      `json:"err_no"`
-		ErrorMsg  string   `json:"err_msg"`
-		Result    []string `json:"result"`
-	}
-
-	// 模拟响应
-	response := BaiduResponse{
-		ErrorCode: 0,
-		ErrorMsg:  "success",
-		Result:    []string{"这是百度语音识别的结果。"},
-	}
-
-	if response.ErrorCode != 0 {
-		return "", fmt.Errorf("百度语音识别失败: %s", response.ErrorMsg)
-	}
-
-	if len(response.Result) > 0 {
-		return response.Result[0], nil
-	}
-
-	return "", errors.New("未识别到文本")
+	return "", errors.New("需要配置百度语音识别API")
 }
 
 // xunfeiSpeechToText 使用讯飞语音识别API
 func xunfeiSpeechToText(audioData []byte) (string, error) {
 	// 这里应该是实际的讯飞API调用
 	// 需要替换为你自己的API密钥和配置
-
-	// 模拟API调用
-	type XunfeiResponse struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
-		Data    struct {
-			Text string `json:"text"`
-		} `json:"data"`
-	}
-
-	// 模拟响应
-	response := XunfeiResponse{
-		Code:    0,
-		Message: "success",
-		Data: struct {
-			Text string `json:"text"`
-		}{
-			Text: "这是讯飞语音识别的结果。",
-		},
-	}
-
-	if response.Code != 0 {
-		return "", fmt.Errorf("讯飞语音识别失败: %s", response.Message)
-	}
-
-	return response.Data.Text, nil
+	return "", errors.New("需要配置讯飞语音识别API")
 }
 
 // googleSpeechToText 使用Google语音识别API
 func googleSpeechToText(audioData []byte) (string, error) {
 	// 这里应该是实际的Google API调用
 	// 需要替换为你自己的API密钥和配置
-
-	// 模拟API调用
-	type GoogleResponse struct {
-		Results []struct {
-			Alternatives []struct {
-				Transcript string  `json:"transcript"`
-				Confidence float64 `json:"confidence"`
-			} `json:"alternatives"`
-		} `json:"results"`
-	}
-
-	// 模拟响应
-	response := GoogleResponse{
-		Results: []struct {
-			Alternatives []struct {
-				Transcript string  `json:"transcript"`
-				Confidence float64 `json:"confidence"`
-			} `json:"alternatives"`
-		}{
-			{
-				Alternatives: []struct {
-					Transcript string  `json:"transcript"`
-					Confidence float64 `json:"confidence"`
-				}{
-					{
-						Transcript: "这是Google语音识别的结果。",
-						Confidence: 0.98,
-					},
-				},
-			},
-		},
-	}
-
-	if len(response.Results) > 0 && len(response.Results[0].Alternatives) > 0 {
-		return response.Results[0].Alternatives[0].Transcript, nil
-	}
-
-	return "", errors.New("未识别到文本")
+	return "", errors.New("需要配置Google语音识别API")
 }

@@ -738,7 +738,7 @@ class _ChatMessageItemState extends State<ChatMessageItem> {
       }
 
       // 保存消息
-      LocalMessageStorage.saveMessage(currentUserId, targetId, message);
+      LocalMessageStorage.saveMessage(currentUserId.toString(), targetId.toString(), message);
       debugPrint('[ChatMessageItem] 消息已保存到本地存储: ${message['id']}');
     } catch (e) {
       debugPrint('[ChatMessageItem] 保存消息到本地存储失败: $e');

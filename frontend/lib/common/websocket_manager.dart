@@ -57,20 +57,12 @@ class WebSocketManager {
         return false;
       }
 
-      // 获取WebSocket连接URL
-      final response = await Api.getWebSocketUrl();
+      // 使用固定的WebSocket URL，避免API调用失败
+      final wsUrl = 'ws://localhost:3001/ws';
+      final token = Persistence.getToken();
 
-      if (response['success'] != true || response['data'] == null) {
-        debugPrint('[WebSocketManager] 获取WebSocket连接URL失败: ${response['msg']}');
-        _isConnecting = false;
-        return false;
-      }
-
-      final wsUrl = response['data']['url'];
-      final token = response['data']['token'];
-
-      if (wsUrl == null || token == null) {
-        debugPrint('[WebSocketManager] WebSocket连接URL或Token为空');
+      if (token == null) {
+        debugPrint('[WebSocketManager] Token为空，无法建立WebSocket连接');
         _isConnecting = false;
         return false;
       }

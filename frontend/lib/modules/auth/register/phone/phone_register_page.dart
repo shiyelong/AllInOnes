@@ -52,12 +52,12 @@ class _PhoneRegisterPageState extends State<PhoneRegisterPage> {
                           content: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text('模拟手机验证码:'),
+                              Text('验证码已发送到您的手机'),
                               SizedBox(height: 10),
                               Text(
-                                controller.generatedCode,
+                                '请查看短信',
                                 style: TextStyle(
-                                  fontSize: 24,
+                                  fontSize: 16,
                                   fontWeight: FontWeight.bold,
                                   color: Colors.blue,
                                 ),
@@ -65,14 +65,7 @@ class _PhoneRegisterPageState extends State<PhoneRegisterPage> {
                             ],
                           ),
                           actions: [
-                            TextButton(
-                              onPressed: () {
-                                // 自动填充验证码
-                                codeCtrl.text = controller.generatedCode;
-                                Navigator.pop(context);
-                              },
-                              child: Text('自动填充'),
-                            ),
+
                             TextButton(
                               onPressed: () => Navigator.pop(context),
                               child: Text('关闭'),

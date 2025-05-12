@@ -45,7 +45,7 @@ class LocalMessageStorage {
   /// [userId] 当前用户ID
   /// [targetId] 目标用户ID
   /// [message] 消息内容
-  static Future<bool> saveMessage(int userId, int targetId, Map<String, dynamic> message) async {
+  static Future<bool> saveMessage(String userId, String targetId, Map<String, dynamic> message) async {
     try {
       final prefs = await SharedPreferences.getInstance();
 
@@ -426,7 +426,7 @@ class LocalMessageStorage {
   /// 获取本地存储的消息
   /// [userId] 当前用户ID
   /// [targetId] 目标用户ID
-  static Future<List<Map<String, dynamic>>> getMessages(int userId, int targetId) async {
+  static Future<List<Map<String, dynamic>>> getMessages(String userId, String targetId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
 
@@ -935,7 +935,7 @@ class LocalMessageStorage {
   /// [userId] 当前用户ID
   /// [targetId] 目标用户ID
   /// [formatPreview] 是否格式化消息预览，默认为false
-  static Future<Map<String, dynamic>?> getLastMessage(int userId, int targetId, {bool formatPreview = false}) async {
+  static Future<Map<String, dynamic>?> getLastMessage(String userId, String targetId, {bool formatPreview = false}) async {
     try {
       final prefs = await SharedPreferences.getInstance();
 
@@ -972,7 +972,7 @@ class LocalMessageStorage {
   /// [userId] 当前用户ID
   /// [targetId] 目标用户ID
   /// [deleteMediaFiles] 是否同时删除媒体文件，默认为false
-  static Future<bool> clearMessages(int userId, int targetId, {bool deleteMediaFiles = false}) async {
+  static Future<bool> clearMessages(String userId, String targetId, {bool deleteMediaFiles = false}) async {
     try {
       final prefs = await SharedPreferences.getInstance();
 
@@ -1171,7 +1171,7 @@ class LocalMessageStorage {
   }
 
   /// 获取所有失败的消息
-  static Future<List<Map<String, dynamic>>> getFailedMessages(int userId) async {
+  static Future<List<Map<String, dynamic>>> getFailedMessages(String userId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final failedMessages = <Map<String, dynamic>>[];
@@ -1229,7 +1229,7 @@ class LocalMessageStorage {
   }
 
   /// 保存最后一条消息
-  static Future<void> _saveLastMessage(int userId, int targetId, Map<String, dynamic> message) async {
+  static Future<void> _saveLastMessage(String userId, String targetId, Map<String, dynamic> message) async {
     try {
       final prefs = await SharedPreferences.getInstance();
 
@@ -1245,14 +1245,14 @@ class LocalMessageStorage {
   }
 
   /// 获取聊天消息的键
-  static String _getChatKey(int userId, int targetId) {
+  static String _getChatKey(String userId, String targetId) {
     // 确保键的一致性，无论是A发给B还是B发给A
     final sortedIds = [userId, targetId]..sort();
     return '$_messageKeyPrefix${sortedIds[0]}_${sortedIds[1]}';
   }
 
   /// 获取最后一条消息的键
-  static String _getLastMessageKey(int userId, int targetId) {
+  static String _getLastMessageKey(String userId, String targetId) {
     // 确保键的一致性，无论是A发给B还是B发给A
     final sortedIds = [userId, targetId]..sort();
     return '$_lastMessageKeyPrefix${sortedIds[0]}_${sortedIds[1]}';

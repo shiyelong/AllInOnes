@@ -36,7 +36,7 @@ class _GroupChatPageState extends State<GroupChatPage> {
   bool _isSending = false;
   String _errorMessage = '';
   Timer? _refreshTimer;
-  int _currentUserId = 0;
+  String _currentUserId = "0";
   bool _isNetworkConnected = true; // 网络连接状态
   double _networkQuality = 1.0; // 网络质量
   List<Map<String, dynamic>> _pendingMessages = []; // 待发送的消息

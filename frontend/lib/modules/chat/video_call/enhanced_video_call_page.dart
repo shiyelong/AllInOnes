@@ -9,8 +9,8 @@ import 'package:frontend/common/theme_manager.dart';
 import 'package:frontend/widgets/app_avatar.dart';
 
 class EnhancedVideoCallPage extends StatefulWidget {
-  final int userId;
-  final int peerId;
+  final String userId;
+  final String peerId;
   final String peerName;
   final String peerAvatar;
   final bool isOutgoing;
@@ -48,7 +48,7 @@ class _EnhancedVideoCallPageState extends State<EnhancedVideoCallPage> with Sing
   // 模拟视频流
   Widget _localVideoView = Container(color: Colors.black);
   Widget _remoteVideoView = Container(color: Colors.black);
-  
+
   // UI动画相关
   late AnimationController _backgroundAnimController;
   late Animation<Color?> _backgroundColorAnimation;
@@ -56,16 +56,16 @@ class _EnhancedVideoCallPageState extends State<EnhancedVideoCallPage> with Sing
   @override
   void initState() {
     super.initState();
-    
+
     // 设置全屏和横屏
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    
+
     // 初始化通话
     _initializeCall();
-    
+
     // 设置控制栏自动隐藏
     _resetControlsTimer();
-    
+
     // 初始化动画
     _initAnimations();
   }
@@ -74,17 +74,17 @@ class _EnhancedVideoCallPageState extends State<EnhancedVideoCallPage> with Sing
   void dispose() {
     // 恢复系统UI
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    
+
     // 取消定时器
     _controlsTimer?.cancel();
     _callDurationTimer?.cancel();
-    
+
     // 结束通话
     _endCall();
-    
+
     // 释放动画控制器
     _backgroundAnimController.dispose();
-    
+
     super.dispose();
   }
 
@@ -110,19 +110,19 @@ class _EnhancedVideoCallPageState extends State<EnhancedVideoCallPage> with Sing
     try {
       // 模拟连接过程
       await Future.delayed(Duration(seconds: 2));
-      
+
       if (mounted) {
         setState(() {
           _isConnecting = false;
           _isConnected = true;
           _callStatus = '通话中';
-          
+
           // 如果是语音通话，默认关闭视频
           if (widget.callType == 'audio') {
             _isVideoEnabled = false;
           }
         });
-        
+
         // 开始计时
         _startCallDurationTimer();
       }
@@ -148,11 +148,11 @@ class _EnhancedVideoCallPageState extends State<EnhancedVideoCallPage> with Sing
 
   void _resetControlsTimer() {
     _controlsTimer?.cancel();
-    
+
     setState(() {
       _isControlsVisible = true;
     });
-    
+
     _controlsTimer = Timer(Duration(seconds: 5), () {
       if (mounted && _isConnected) {
         setState(() {
@@ -166,7 +166,7 @@ class _EnhancedVideoCallPageState extends State<EnhancedVideoCallPage> with Sing
     setState(() {
       _isControlsVisible = !_isControlsVisible;
     });
-    
+
     if (_isControlsVisible) {
       _resetControlsTimer();
     }
@@ -225,7 +225,7 @@ class _EnhancedVideoCallPageState extends State<EnhancedVideoCallPage> with Sing
     final hours = seconds ~/ 3600;
     final minutes = (seconds % 3600) ~/ 60;
     final secs = seconds % 60;
-    
+
     if (hours > 0) {
       return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
     } else {
@@ -237,7 +237,7 @@ class _EnhancedVideoCallPageState extends State<EnhancedVideoCallPage> with Sing
   Widget build(BuildContext context) {
     final theme = ThemeManager.currentTheme;
     final size = MediaQuery.of(context).size;
-    
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: GestureDetector(
@@ -260,7 +260,7 @@ class _EnhancedVideoCallPageState extends State<EnhancedVideoCallPage> with Sing
                       )
                     : Container(color: Colors.black),
               ),
-            
+
             // 语音通话界面
             if (widget.callType == 'audio' || !_isVideoEnabled)
               Positioned.fill(
@@ -314,7 +314,7 @@ class _EnhancedVideoCallPageState extends State<EnhancedVideoCallPage> with Sing
                   ),
                 ),
               ),
-            
+
             // 本地视频（小窗口）
             if (widget.callType == 'video' && _isVideoEnabled && _isConnected && !_isMinimized)
               Positioned(
@@ -340,7 +340,7 @@ class _EnhancedVideoCallPageState extends State<EnhancedVideoCallPage> with Sing
                   ),
                 ),
               ),
-            
+
             // 最小化的本地视频（浮动图标）
             if (widget.callType == 'video' && _isVideoEnabled && _isConnected && _isMinimized)
               Positioned(
@@ -367,7 +367,7 @@ class _EnhancedVideoCallPageState extends State<EnhancedVideoCallPage> with Sing
                   ),
                 ),
               ),
-            
+
             // 顶部状态栏
             if (_isControlsVisible)
               Positioned(
@@ -449,7 +449,7 @@ class _EnhancedVideoCallPageState extends State<EnhancedVideoCallPage> with Sing
                   ),
                 ),
               ),
-            
+
             // 底部控制栏
             if (_isControlsVisible)
               Positioned(
@@ -498,7 +498,7 @@ class _EnhancedVideoCallPageState extends State<EnhancedVideoCallPage> with Sing
                   ),
                 ),
               ),
-            
+
             // 连接中或错误提示
             if (_isConnecting || _errorMessage.isNotEmpty)
               Positioned.fill(

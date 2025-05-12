@@ -8,7 +8,7 @@ import 'package:frontend/common/text_sanitizer.dart';
 import 'package:frontend/common/message_formatter.dart';
 
 class ChatService {
-  static Future<List> fetchRecentChats(int userId) async {
+  static Future<List> fetchRecentChats(String userId) async {
     try {
       // 获取好友列表
       final friendsResponse = await Api.getFriendList();
@@ -124,7 +124,7 @@ class ChatService {
     }
   }
 
-  static Future<List<Map<String, dynamic>>> fetchMessages(int chatId) async {
+  static Future<List<Map<String, dynamic>>> fetchMessages(String chatId) async {
     try {
       final userId = Persistence.getUserInfo()?.id;
       if (userId == null) {
@@ -222,7 +222,7 @@ class ChatService {
     return 'msg_${fromId}_${toId}_${createdAt}_${type}_${content.hashCode}';
   }
 
-  static Future<bool> sendMessage(int chatId, String text, {int retryCount = 0}) async {
+  static Future<bool> sendMessage(String chatId, String text, {int retryCount = 0}) async {
     try {
       final userId = Persistence.getUserInfo()?.id;
       if (userId == null) {
@@ -313,7 +313,7 @@ class ChatService {
   }
 
   // 重试发送失败的消息
-  static Future<bool> retrySendMessage(int chatId, Map<String, dynamic> failedMessage) async {
+  static Future<bool> retrySendMessage(String chatId, Map<String, dynamic> failedMessage) async {
     try {
       final userId = Persistence.getUserInfo()?.id;
       if (userId == null) {

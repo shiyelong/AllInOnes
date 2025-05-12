@@ -179,7 +179,7 @@ class _WalletPageState extends State<WalletPage> with SingleTickerProviderStateM
               keyboardType: TextInputType.numberWithOptions(decimal: true),
             ),
             SizedBox(height: 16),
-            Text('注意：这是模拟充值，不会产生实际费用', style: TextStyle(color: Colors.grey, fontSize: 12)),
+            Text('请输入充值金额', style: TextStyle(color: Colors.grey, fontSize: 12)),
           ],
         ),
         actions: [

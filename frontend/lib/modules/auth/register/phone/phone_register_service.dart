@@ -2,11 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:frontend/common/api.dart';
 
 class PhoneRegisterService {
-  // 本地生成6位验证码
-  static String generateLocalCode() {
-    final rand = List.generate(6, (index) => (DateTime.now().millisecondsSinceEpoch + index * 37) % 10);
-    return rand.join();
-  }
+  // 此方法已不再使用，验证码由后端生成和验证
 
   // 检查手机号是否已注册
   static Future<Map<String, dynamic>> checkPhoneExists(String phone) async {

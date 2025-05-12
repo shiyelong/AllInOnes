@@ -64,9 +64,13 @@ func WebRTCSignal(c *gin.Context) {
 		return
 	}
 
-	// TODO: 通过WebSocket推送信令到目标用户
-	// 这里应该调用WebSocket服务将信令推送给目标用户
-	// 由于WebSocket实现可能比较复杂，这里先模拟一个成功的响应
+	// 通过WebSocket推送信令到目标用户
+	// 调用WebSocket服务将信令推送给目标用户
+	err = utils.WebRTCServer.SendSignal(userID.(uint), req.To, req.Type, req.Signal, req.CallType)
+	if err != nil {
+		utils.Logger.Errorf("发送WebRTC信令失败: %v", err)
+		// 继续处理，不影响API响应
+	}
 
 	// 如果是offer类型的信令，记录通话开始
 	if req.Type == "offer" {

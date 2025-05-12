@@ -77,7 +77,7 @@ class SearchService {
   }
 
   /// 社交模块搜索
-  static Future<Map<String, dynamic>> _searchSocial(String keyword, int userId) async {
+  static Future<Map<String, dynamic>> _searchSocial(String keyword, String userId) async {
     // 搜索好友和群组
     final result = await Api.searchUsers(
       keyword: keyword,
@@ -89,14 +89,14 @@ class SearchService {
   }
 
   /// 聊天记录搜索
-  static Future<Map<String, dynamic>> _searchChatMessages(String keyword, int userId, String chatId) async {
+  static Future<Map<String, dynamic>> _searchChatMessages(String keyword, String userId, String chatId) async {
     // 目前API不支持搜索聊天记录，返回空结果
     // TODO: 实现聊天记录搜索API
     return {'success': true, 'msg': '搜索成功', 'data': []};
   }
 
   /// 好友搜索
-  static Future<Map<String, dynamic>> _searchFriends(String keyword, int userId) async {
+  static Future<Map<String, dynamic>> _searchFriends(String keyword, String userId) async {
     // 搜索好友
     final result = await Api.searchUsers(
       keyword: keyword,
@@ -122,7 +122,7 @@ class SearchService {
   }
 
   /// 全局搜索
-  static Future<Map<String, dynamic>> _searchGlobal(String keyword, int userId) async {
+  static Future<Map<String, dynamic>> _searchGlobal(String keyword, String userId) async {
     // 合并多个模块的搜索结果
     final socialResult = await _searchSocial(keyword, userId);
 

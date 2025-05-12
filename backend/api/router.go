@@ -38,6 +38,9 @@ func SetupRouter() *gin.Engine {
 
 	// 无需认证的公共API
 	{
+		// 健康检查API - 用于监控和部署检查
+		api.GET("/health", controllers.HealthCheck)
+
 		// 验证码相关
 		api.GET("/captcha", captcha.GetCaptcha)
 		api.POST("/captcha/verify", captcha.VerifyCaptchaHandler)
